@@ -90,10 +90,23 @@ public final class Snapshots {
         List<String> pending = new ArrayList<>();
         double[] shotAt = {-1};
         double[] clock = {0};
+        boolean[] sawDeath = {false};
+        boolean[] sawTransition = {false};
+        // les événements sont émis à l'action ; l'animation correspondante démarre quand la file d'attente l'atteint,
+        // d'où un délai approximatif avant chaque capture
         view.session().battle().addListener(e -> {
-            if (e instanceof BattleEvent.SpellCast c && seen.add(c.spell().style()) && shotAt[0] < 0) {
+            if (shotAt[0] >= 0) return;
+            if (e instanceof BattleEvent.SpellCast c && seen.add(c.spell().style())) {
                 pending.add("sort_" + c.spell().id());
-                shotAt[0] = clock[0] + (c.spell().style() == CastStyle.ARROW_RAIN || c.spell().style() == CastStyle.FIREBALL ? 0.34 : 0.22);
+                shotAt[0] = clock[0] + (c.spell().style() == CastStyle.ARROW_RAIN || c.spell().style() == CastStyle.FIREBALL ? 0.46 : 0.34);
+            } else if (e instanceof BattleEvent.Died && !sawDeath[0]) {
+                sawDeath[0] = true;
+                pending.add("mort");
+                shotAt[0] = clock[0] + 0.75;
+            } else if (e instanceof BattleEvent.TurnStarted t && t.round() == 2 && !sawTransition[0]) {
+                sawTransition[0] = true;
+                pending.add("transition_de_tour");
+                shotAt[0] = clock[0] + 0.25;
             }
         });
         for (int i = 0; i < 60 * 600 && !(view.session().isOver() && !view.session().isBusy()); i++) {

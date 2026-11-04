@@ -14,6 +14,8 @@ public final class Camera {
     private Rectangle2D world = new Rectangle2D.Double(0, 0, 1, 1);
     private int viewW = 1;
     private int viewH = 1;
+    private double targetX = Double.NaN;
+    private double targetY = Double.NaN;
 
     /** Cadre l'arène dans la zone utile de l'écran (en tenant compte des marges du HUD). */
     public void fit(Rectangle2D worldBounds, int viewWidth, int viewHeight, int marginTop, int marginBottom) {
@@ -36,7 +38,39 @@ public final class Camera {
         clamp();
     }
 
+    /**
+     * Glisse en douceur pour amener un point du monde dans la zone centrale de l'écran, seulement s'il
+     * en sort (pas de mouvement inutile quand le combattant actif est déjà bien visible).
+     */
+    public void focus(double wx, double wy, int marginTop, int marginBottom) {
+        double sx = offsetX + wx * zoom;
+        double sy = offsetY + wy * zoom;
+        double left = viewW * 0.22;
+        double right = viewW * 0.78;
+        double top = marginTop + 40;
+        double bottom = viewH - marginBottom - 20;
+        double dx = sx < left ? left - sx : sx > right ? right - sx : 0;
+        double dy = sy < top ? top - sy : sy > bottom ? bottom - sy : 0;
+        if (dx == 0 && dy == 0) return;
+        targetX = offsetX + dx;
+        targetY = offsetY + dy;
+    }
+
+    /** Avance le glissement de la caméra. */
+    public void update(double dt) {
+        if (Double.isNaN(targetX)) return;
+        double k = 1 - Math.exp(-6 * dt);
+        offsetX += (targetX - offsetX) * k;
+        offsetY += (targetY - offsetY) * k;
+        if (Math.abs(targetX - offsetX) < 0.5 && Math.abs(targetY - offsetY) < 0.5) {
+            targetX = Double.NaN;
+            targetY = Double.NaN;
+        }
+        clamp();
+    }
+
     public void zoomAt(double screenX, double screenY, double factor) {
+        targetX = Double.NaN;
         double newZoom = Math.max(fitZoom * 0.75, Math.min(fitZoom * 2.4, zoom * factor));
         double wx = (screenX - offsetX) / zoom;
         double wy = (screenY - offsetY) / zoom;
@@ -47,6 +81,7 @@ public final class Camera {
     }
 
     public void pan(double dx, double dy) {
+        targetX = Double.NaN;
         offsetX += dx;
         offsetY += dy;
         clamp();

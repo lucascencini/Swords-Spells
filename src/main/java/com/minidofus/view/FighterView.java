@@ -13,6 +13,7 @@ import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Graphics2D;
 import java.awt.RadialGradientPaint;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
@@ -40,9 +41,12 @@ public final class FighterView {
     private double flashDamage;
     private double flashHeal;
     private double lunge;
-    private double deathFade;
     private double fade = 1;
     private double clock;
+    private double castGlow;
+    private Color castColor = Color.WHITE;
+    private double deathProgress;
+    private double stepPhase;
 
     public FighterView(Fighter fighter, Facing initialFacing) {
         this.fighter = fighter;
@@ -71,10 +75,19 @@ public final class FighterView {
     public void flashDamage() { this.flashDamage = 1; }
     public void flashHeal() { this.flashHeal = 1; }
     public void lunge() { this.lunge = 1; }
+    /** Incantation : aura et étincelles de la couleur du sort. */
+    public void cast(Color color) {
+        this.castColor = color;
+        this.castGlow = 1;
+    }
+    /** Progression de la chute (0 = debout, 1 = au sol et disparu). */
+    public void setDeathProgress(double p) { this.deathProgress = p; }
+    public double deathProgress() { return deathProgress; }
     /** Opacité (0 à 1) utilisée par la téléportation. */
     public void setFade(double fade) { this.fade = fade; }
 
     public void setGridPosition(double x, double y, double hop) {
+        if (hop > 0) stepPhase += Math.hypot(x - gx, y - gy) * Math.PI;
         this.gx = x;
         this.gy = y;
         this.hop = hop;
@@ -93,8 +106,9 @@ public final class FighterView {
         flashDamage = Math.max(0, flashDamage - dt * 5);
         flashHeal = Math.max(0, flashHeal - dt * 3);
         lunge = Math.max(0, lunge - dt * 5);
+        castGlow = Math.max(0, castGlow - dt * 1.8);
         hpBar = Easing.approach(hpBar, shownHp, 10, dt);
-        if (shownHp <= 0) deathFade = Math.min(1, deathFade + dt * 1.5);
+
     }
 
     /** Profondeur pour le tri d'affichage (les objets plus « bas » à l'écran passent devant). */
@@ -112,10 +126,14 @@ public final class FighterView {
         return new Point2D.Double(p.x, p.y - 62 - hop);
     }
 
-    /** Ombre et anneau d'équipe (épais et pulsé pour le combattant actif). */
+    /** Ombre et anneau d'équipe (épais et pulsé pour le combattant actif) ; petite stèle une fois mort. */
     public void drawGroundMarks(Graphics2D g, boolean active) {
-        if (shownHp <= 0) return;
         Point2D.Double p = worldFeet();
+        if (deathProgress >= 1) {
+            drawGrave(g, p);
+            return;
+        }
+        if (shownHp <= 0) return;
         g.setColor(new Color(0, 0, 0, (int) (70 * fade)));
         g.fill(new Ellipse2D.Double(p.x - 16, p.y - 6, 32, 12));
         Color team = UiTheme.teamColor(fighter.team());
@@ -127,32 +145,82 @@ public final class FighterView {
         g.setStroke(new BasicStroke(1f));
     }
 
+    /**
+     * Dessin du combattant. Le pack ne fournit que des poses fixes : toutes les animations sont
+     * procédurales (respiration, balancement de marche, élan, recul, aura d'incantation, chute).
+     */
     public void draw(Graphics2D g, Assets assets, PoseTable poses) {
+        if (deathProgress >= 1) return;
         Point2D.Double feet = worldFeet();
         BufferedImage img = poses.image(fighter.classId(), facing);
-        boolean idle = hop == 0 && shownHp > 0;
-        double bob = idle ? Math.sin(clock * 2.6) * 1.2 : 0;
+        boolean idle = hop == 0 && shownHp > 0 && deathProgress == 0;
+        double breathe = idle ? Math.sin(clock * 2.6) : 0;
         double lungeOffset = Math.sin(lunge * Math.PI) * 6;
+        double recoil = flashDamage > 0 ? Math.sin(flashDamage * Math.PI * 4) * 2.5 * flashDamage : 0;
         double dirX = facing == Facing.SE || facing == Facing.NE ? 1 : -1;
         double dirY = facing == Facing.SE || facing == Facing.SW ? 1 : -1;
 
-        double w = img.getWidth() * SPRITE_SCALE;
-        double h = img.getHeight() * SPRITE_SCALE;
-        double x = feet.x - w / 2 + dirX * lungeOffset;
-        double y = feet.y - h * 0.94 - hop + bob + dirY * lungeOffset * 0.5;
+        double cast = castGlow > 0 ? Math.sin(Math.min(1, castGlow) * Math.PI) : 0;
+        double w = img.getWidth() * SPRITE_SCALE * (1 + cast * 0.05);
+        double h = img.getHeight() * SPRITE_SCALE * (1 + breathe * 0.012 + cast * 0.07);
+        double x = -w / 2 + dirX * lungeOffset + recoil;
+        double y = -h * 0.94 - hop + dirY * lungeOffset * 0.5;
 
-        Composite saved = g.getComposite();
-        float alpha = (float) ((1 - deathFade * 0.65) * fade);
+        if (castGlow > 0 && shownHp > 0) drawCastAura(g, feet, cast);
+
+        AffineTransform saved = g.getTransform();
+        Composite savedComposite = g.getComposite();
+        g.translate(feet.x, feet.y);
+        double tilt = hop > 0 ? Math.sin(stepPhase) * 0.07 : 0;
+        if (deathProgress > 0) {
+            double fall = Math.min(1, deathProgress / 0.55);
+            tilt = dirX * fall * fall * 1.35;
+            g.translate(0, deathProgress * 6);
+        }
+        if (tilt != 0) g.rotate(tilt);
+        float alpha = (float) (fade * (deathProgress > 0.45 ? 1 - (deathProgress - 0.45) / 0.55 : 1));
         if (alpha < 1) g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0, alpha)));
         g.drawImage(img, (int) Math.round(x), (int) Math.round(y), (int) Math.round(w), (int) Math.round(h), null);
         overlay(g, assets, img, UiTheme.DAMAGE, flashDamage * 0.75, x, y, w, h);
         overlay(g, assets, img, UiTheme.HEAL, flashHeal * 0.6, x, y, w, h);
+        overlay(g, assets, img, castColor, cast * 0.35, x, y, w, h);
         if (shows(StatusKind.POISON) && shownHp > 0) {
             overlay(g, assets, img, UiTheme.POISON, 0.12 + 0.1 * Math.sin(clock * 3), x, y, w, h);
         }
+        g.setTransform(saved);
         if (isShielded() && shownHp > 0) drawShieldBubble(g, feet);
-        g.setComposite(saved);
-        if (shownHp > 0 && fade > 0.5) drawStatusBadges(g, feet.x, y - 6);
+        g.setComposite(savedComposite);
+        if (shownHp > 0 && fade > 0.5) drawStatusBadges(g, feet.x, feet.y + y - 6);
+    }
+
+    /** Aura colorée au sol et étincelles qui montent pendant une incantation. */
+    private void drawCastAura(Graphics2D g, Point2D.Double feet, double strength) {
+        float r = (float) (26 + 14 * strength);
+        g.setPaint(new RadialGradientPaint((float) feet.x, (float) feet.y - 26, r * 1.6f, new float[] {0f, 1f},
+                new Color[] {UiTheme.withAlpha(castColor, (int) (120 * strength)), UiTheme.withAlpha(castColor, 0)}));
+        g.fill(new Ellipse2D.Double(feet.x - r * 1.6, feet.y - 26 - r * 1.6, r * 3.2, r * 3.2));
+        for (int i = 0; i < 7; i++) {
+            double a = i * 0.9 + clock * 2;
+            double rise = ((clock * 1.3 + i * 0.37) % 1.0);
+            double sx = feet.x + Math.cos(a) * 16;
+            double sy = feet.y - 6 - rise * 56;
+            int alpha = (int) (230 * strength * (1 - rise));
+            g.setColor(UiTheme.withAlpha(castColor.brighter(), alpha));
+            g.fill(new Ellipse2D.Double(sx - 1.6, sy - 1.6, 3.2, 3.2));
+        }
+    }
+
+    /** Petite stèle aux couleurs de l'équipe, là où le combattant est tombé. */
+    private void drawGrave(Graphics2D g, Point2D.Double p) {
+        g.setColor(new Color(0, 0, 0, 60));
+        g.fill(new Ellipse2D.Double(p.x - 11, p.y - 4, 22, 8));
+        g.setColor(new Color(150, 145, 140));
+        g.fillRoundRect((int) p.x - 6, (int) p.y - 18, 12, 16, 8, 8);
+        g.setColor(new Color(90, 85, 80));
+        g.drawRoundRect((int) p.x - 6, (int) p.y - 18, 12, 16, 8, 8);
+        g.setColor(UiTheme.teamColor(fighter.team()));
+        g.fillRect((int) p.x - 1, (int) p.y - 15, 2, 9);
+        g.fillRect((int) p.x - 4, (int) p.y - 12, 8, 2);
     }
 
     private void overlay(Graphics2D g, Assets assets, BufferedImage img, Color color, double strength,

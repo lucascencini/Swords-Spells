@@ -111,7 +111,7 @@ public final class GameView extends JComponent {
     }
 
     private void newSession(MatchSetup setup) {
-        session = new GameSession(setup, assets, poses, sound, hud);
+        session = new GameSession(setup, assets, poses, sound, hud, p -> camera.focus(p.x, p.y, HUD_TOP, HUD_BOTTOM));
         sound.loop(ambienceOf(setup.theme()), 0.32);
         if (getWidth() > 0) {
             hud.layout(getWidth(), getHeight(), session.spellCount());
@@ -144,6 +144,7 @@ public final class GameView extends JComponent {
 
     /** Fait avancer le jeu de {@code dt} secondes (utilisé par la boucle et par les tests). */
     public void advance(double dt) {
+        camera.update(dt);
         session.update(dt);
         hud.update(dt, session);
     }
