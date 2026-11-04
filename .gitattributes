@@ -1,0 +1,7 @@
+# Fins de ligne : Windows pour les scripts .bat (sinon cmd.exe peut mal les lire), Unix pour les .sh
+*.bat text eol=crlf
+*.sh  text eol=lf
+*.png binary
+*.jpg binary
+*.wav binary
+*.ico binary
