@@ -49,6 +49,7 @@ public final class Hud {
     private Rectangle muteButton = new Rectangle();
     private Rectangle replayButton = new Rectangle();
     private Rectangle newMapButton = new Rectangle();
+    private Rectangle menuButton = new Rectangle();
     private Rectangle bar = new Rectangle();
     private int width;
     private int height;
@@ -123,6 +124,7 @@ public final class Hud {
             if (endScreenTime < 0.6) return null;
             if (replayButton.contains(x, y)) return HudAction.of(HudAction.Type.REPLAY);
             if (newMapButton.contains(x, y)) return HudAction.of(HudAction.Type.NEW_MAP);
+            if (menuButton.contains(x, y)) return HudAction.of(HudAction.Type.MENU);
             return null;
         }
         if (muteButton.contains(x, y)) return HudAction.of(HudAction.Type.MUTE);
@@ -669,10 +671,12 @@ public final class Hud {
             }
         }
         int by = y + h - 58;
-        replayButton = new Rectangle(width / 2 - 170, by, 160, 40);
-        newMapButton = new Rectangle(width / 2 + 10, by, 160, 40);
+        replayButton = new Rectangle(width / 2 - 250, by, 160, 40);
+        newMapButton = new Rectangle(width / 2 - 80, by, 160, 40);
+        menuButton = new Rectangle(width / 2 + 90, by, 160, 40);
         drawPlainButton(g, replayButton, "Rejouer (R)", UiTheme.GOLD);
         drawPlainButton(g, newMapButton, "Nouvelle carte (N)", new Color(0x4A9C5A));
+        drawPlainButton(g, menuButton, "Menu (Échap)", new Color(0x6A5A44));
         g.setComposite(saved);
     }
 

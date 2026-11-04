@@ -51,11 +51,11 @@ if /i "%~1"=="package" (
   if exist "%OUT%\jpackage-input" rmdir /s /q "%OUT%\jpackage-input"
   mkdir "%OUT%\jpackage-input"
   copy /y "%OUT%\mini-dofus.jar" "%OUT%\jpackage-input\" >nul
-  jpackage --type app-image --name MiniDofus --app-version 1.0.0 ^
+  jpackage --type app-image --name SwordsAndSpells --app-version 1.0.0 ^
     --input "%OUT%\jpackage-input" --main-jar mini-dofus.jar --main-class com.minidofus.Main ^
     --add-modules java.desktop ^
     --jlink-options "--strip-debug --no-header-files --no-man-pages --strip-native-commands" ^
     --icon packaging\icon.ico --dest "%OUT%\dist" || exit /b 1
-  echo OK : application autonome dans %OUT%\dist\MiniDofus ^(lancer MiniDofus.exe^)
+  echo OK : application autonome dans %OUT%\dist\SwordsAndSpells ^(lancer SwordsAndSpells.exe^)
 )
 endlocal

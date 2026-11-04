@@ -89,6 +89,8 @@ public final class BattleScene {
     public Iterable<FighterView> views() { return views.values(); }
     public EffectLayer effects() { return effects; }
     public Rectangle2D arenaBounds() { return groundBounds; }
+    /** Sol précalculé de l'arène (aperçu de carte). */
+    public BufferedImage groundImage() { return ground; }
 
     // ------------------------------------------------------------------ construction des caches
 

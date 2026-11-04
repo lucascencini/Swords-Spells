@@ -36,11 +36,11 @@ case "$1" in
     cp "$OUT/mini-dofus.jar" "$OUT/jpackage-input/"
     ICON=packaging/icon.png
     [ "$(uname)" = "Darwin" ] && ICON=""   # macOS attend un .icns
-    jpackage --type app-image --name MiniDofus --app-version 1.0.0 \
+    jpackage --type app-image --name SwordsAndSpells --app-version 1.0.0 \
       --input "$OUT/jpackage-input" --main-jar mini-dofus.jar --main-class com.minidofus.Main \
       --add-modules java.desktop \
       --jlink-options "--strip-debug --no-header-files --no-man-pages --strip-native-commands" \
       ${ICON:+--icon "$ICON"} --dest "$OUT/dist"
-    echo "OK : application autonome dans $OUT/dist/MiniDofus"
+    echo "OK : application autonome dans $OUT/dist/SwordsAndSpells"
     ;;
 esac
