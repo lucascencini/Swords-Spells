@@ -322,10 +322,7 @@ def main():
         save(load(src / rel), dst / "fx" / f"{name}.png")
     for name, rel in PORTRAITS.items():
         save(trim(keep_main_components(load(src / rel), 0.5)), dst / "ui" / f"portrait_{name}.png")
-    # Archère : dérivée du Mage
-    for i in range(1, 8):
-        save(recolor_blue_to_green(load(src / f"characters/mage/mage_pose_0{i}.png")), dst / "characters" / f"archer_{i}.png")
-    save(recolor_blue_to_green(trim(keep_main_components(load(src / PORTRAITS["mage"]), 0.5))), dst / "ui" / "portrait_archer.png")
+    # Archère : importée depuis tools/source par tools/import_sources.py
     for name, rel in ICONS.items():
         save(trim(keep_main_components(load(src / rel), 0.5)), dst / "ui" / f"icon_{name}.png")
 

@@ -7,10 +7,10 @@ import static com.minidofus.model.map.DecorKind.*;
 /** Ambiances de carte : biome, densité du décor, particularité du terrain et éléments utilisés. */
 public enum MapTheme {
 
-    FOREST("Clairière forestière", Biome.MEADOW, 10, 22, 36, Feature.NONE,
+    FOREST("Clairière forestière", Biome.MEADOW, 10, 0, 0, Feature.NONE,
             List.of(ROCK_CLUSTER_1, ROCK_CLUSTER_2, FALLEN_LOG),
             List.of(TREE_OAK_1, TREE_OAK_2, TREE_OAK_3, TREE_DECIDUOUS, TREE_PINE_1, TREE_PINE_2, TREE_PINE_3, BUSH),
-            List.of(FLOWERS_PURPLE, FLOWERS_RED, FLOWERS_WHITE, FLOWERS_YELLOW, FLOWERS_BLUE)),
+            List.of(FLOWERS_PURPLE, FLOWERS_RED, FLOWERS_WHITE, FLOWERS_YELLOW, FLOWERS_BLUE), "forest"),
     RUINS("Ruines anciennes", Biome.MEADOW, 16, 8, 20, Feature.STONE_PATH,
             List.of(ROCK_CLUSTER_1, ROCK_CLUSTER_2, CRATE_1, CRATE_2),
             List.of(TREE_OAK_1, TREE_OAK_2, TREE_DECIDUOUS, TREE_PINE_1, TREE_PINE_3, BUSH),
@@ -44,9 +44,16 @@ public enum MapTheme {
     private final List<DecorKind> obstacleKinds;
     private final List<DecorKind> perimeterKinds;
     private final List<DecorKind> flowerKinds;
+    private final String backdrop;
 
     MapTheme(String displayName, Biome biome, int obstacles, int flowers, int trees, Feature feature,
              List<DecorKind> obstacleKinds, List<DecorKind> perimeterKinds, List<DecorKind> flowerKinds) {
+        this(displayName, biome, obstacles, flowers, trees, feature, obstacleKinds, perimeterKinds, flowerKinds, null);
+    }
+
+    MapTheme(String displayName, Biome biome, int obstacles, int flowers, int trees, Feature feature,
+             List<DecorKind> obstacleKinds, List<DecorKind> perimeterKinds, List<DecorKind> flowerKinds, String backdrop) {
+        this.backdrop = backdrop;
         this.displayName = displayName;
         this.biome = biome;
         this.obstacles = obstacles;
@@ -68,4 +75,10 @@ public enum MapTheme {
     public List<DecorKind> obstacleKinds() { return obstacleKinds; }
     public List<DecorKind> perimeterKinds() { return perimeterKinds; }
     public List<DecorKind> flowerKinds() { return flowerKinds; }
+
+    /**
+     * Illustration servant de sol et de décor ({@code resources/backdrops/<nom>.jpg}), ou {@code null} pour
+     * une carte construite en tuiles. Une carte illustrée n'a pas de décor généré autour de l'arène.
+     */
+    public String backdrop() { return backdrop; }
 }
