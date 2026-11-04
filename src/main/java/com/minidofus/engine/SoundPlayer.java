@@ -29,6 +29,9 @@ public final class SoundPlayer implements AutoCloseable {
     });
     private volatile boolean muted;
     private volatile boolean disabled;
+    private volatile String loopName;
+    private volatile double loopVolume;
+    private Clip loopClip;
 
     /** Lance le préchargement sans bloquer l'ouverture de la fenêtre. */
     public void preload(String... names) {
@@ -50,8 +53,45 @@ public final class SoundPlayer implements AutoCloseable {
         scheduler.schedule(() -> playNow(name, volume), (long) (delaySeconds * 1000), TimeUnit.MILLISECONDS);
     }
 
+    /** Joue une ambiance en boucle (remplace l'ambiance précédente). */
+    public void loop(String name, double volume) {
+        loopName = name;
+        loopVolume = volume;
+        scheduler.execute(this::restartLoop);
+    }
+
+    public void stopLoop() {
+        loopName = null;
+        scheduler.execute(this::restartLoop);
+    }
+
+    private void restartLoop() {
+        if (loopClip != null) {
+            loopClip.stop();
+            loopClip.close();
+            loopClip = null;
+        }
+        if (loopName == null || muted || disabled) return;
+        InputStream raw = SoundPlayer.class.getResourceAsStream("/sounds/" + loopName + ".wav");
+        if (raw == null) {
+            System.err.println("[son] ambiance manquante : " + loopName);
+            return;
+        }
+        try (AudioInputStream in = AudioSystem.getAudioInputStream(new BufferedInputStream(raw))) {
+            Clip clip = AudioSystem.getClip();
+            clip.open(in);
+            setVolume(clip, loopVolume);
+            clip.loop(Clip.LOOP_CONTINUOUSLY);
+            loopClip = clip;
+        } catch (Exception | LinkageError e) {
+            disabled = true;
+            System.err.println("[son] audio indisponible, jeu silencieux (" + e.getMessage() + ")");
+        }
+    }
+
     public boolean toggleMute() {
         muted = !muted;
+        scheduler.execute(this::restartLoop);
         return muted;
     }
 
@@ -103,6 +143,7 @@ public final class SoundPlayer implements AutoCloseable {
     @Override
     public void close() {
         scheduler.shutdownNow();
+        if (loopClip != null) loopClip.close();
         for (Clip[] pool : pools.values()) {
             for (Clip c : pool) {
                 if (c != null) c.close();

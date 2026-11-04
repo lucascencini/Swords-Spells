@@ -48,7 +48,12 @@ public final class MapGenerator {
         paintGround(board, rng);
         if (withObstacles) {
             if (theme.feature() == MapTheme.Feature.STONE_PATH) paintStonePath(board, rng, spawnA, spawnB);
-            if (theme.feature() == MapTheme.Feature.LAKE) paintLake(board, rng, spawnA, spawnB);
+            switch (theme.feature()) {
+                case LAKE -> paintLake(board, rng, spawnA, spawnB, Terrain.WATER, 14, 9);
+                case FROZEN_LAKE -> paintLake(board, rng, spawnA, spawnB, Terrain.ICE, 16, 10);
+                case OASIS -> paintLake(board, rng, spawnA, spawnB, Terrain.WATER, 7, 5);
+                default -> { }
+            }
         }
 
         List<DecorPlacement> decor = new ArrayList<>();
@@ -57,7 +62,7 @@ public final class MapGenerator {
             if (!allSpawnsConnected(board)) return null;
         }
         placeFlowers(theme, board, rng, decor);
-        placeTrees(theme, rng, decor);
+        placePerimeter(theme, rng, decor);
         return new Arena(theme, seed, board, List.copyOf(decor), RED_SPAWNS, BLUE_SPAWNS);
     }
 
@@ -89,8 +94,8 @@ public final class MapGenerator {
         board.setTerrain(x, y, Terrain.STONE);
     }
 
-    /** Étang irrégulier : croissance aléatoire d'une tache d'eau loin des points d'apparition. */
-    private static void paintLake(Board board, Random rng, Cell a, Cell b) {
+    /** Étendue irrégulière (eau ou glace) : croissance aléatoire d'une tache loin des points d'apparition. */
+    private static void paintLake(Board board, Random rng, Cell a, Cell b, Terrain terrain, int minSize, int extra) {
         List<Cell> candidates = new ArrayList<>();
         for (int x = 2; x < SIZE - 2; x++) {
             for (int y = 2; y < SIZE - 2; y++) {
@@ -102,15 +107,15 @@ public final class MapGenerator {
         Cell seedCell = candidates.get(rng.nextInt(candidates.size()));
         List<Cell> water = new ArrayList<>();
         water.add(seedCell);
-        board.setTerrain(seedCell.x(), seedCell.y(), Terrain.WATER);
-        int target = 14 + rng.nextInt(9);
+        board.setTerrain(seedCell.x(), seedCell.y(), terrain);
+        int target = minSize + rng.nextInt(extra);
         for (int guard = 0; guard < 400 && water.size() < target; guard++) {
             Cell base = water.get(rng.nextInt(water.size()));
             int[] d = Cell.ORTHOGONAL[rng.nextInt(4)];
             Cell next = base.plus(d[0], d[1]);
             if (!board.inBounds(next) || nearSpawn(next, SPAWN_CLEARANCE + 2)) continue;
-            if (board.terrain(next.x(), next.y()) == Terrain.WATER) continue;
-            board.setTerrain(next.x(), next.y(), Terrain.WATER);
+            if (board.terrain(next.x(), next.y()) == terrain) continue;
+            board.setTerrain(next.x(), next.y(), terrain);
             water.add(next);
         }
     }
@@ -133,32 +138,32 @@ public final class MapGenerator {
     }
 
     private static void placeFlowers(MapTheme theme, Board board, Random rng, List<DecorPlacement> out) {
-        DecorKind[] kinds = {DecorKind.FLOWERS_PURPLE, DecorKind.FLOWERS_RED, DecorKind.FLOWERS_WHITE,
-                DecorKind.FLOWERS_YELLOW, DecorKind.FLOWERS_BLUE};
+        List<DecorKind> kinds = theme.flowerKinds();
+        if (kinds.isEmpty()) return;
         for (int i = 0; i < theme.flowers(); i++) {
             int x = rng.nextInt(SIZE);
             int y = rng.nextInt(SIZE);
             if (!board.isWalkable(x, y)) continue;
-            out.add(new DecorPlacement(kinds[rng.nextInt(kinds.length)],
+            out.add(new DecorPlacement(kinds.get(rng.nextInt(kinds.size())),
                     x + (rng.nextDouble() - 0.5) * 0.5, y + (rng.nextDouble() - 0.5) * 0.5,
                     0.9 + rng.nextDouble() * 0.25, rng.nextBoolean()));
         }
     }
 
     /**
-     * Arbres sur les côtés et au premier plan de l'arène (jamais derrière : ils flotteraient dans le ciel),
-     * hors de l'emprise visuelle du terrain de jeu.
+     * Décor du pourtour (arbres, cactus, torches…) hors de l'emprise visuelle du terrain de jeu. Sous un ciel,
+     * jamais derrière l'arène : il flotterait au-dessus de l'horizon.
      */
-    private static void placeTrees(MapTheme theme, Random rng, List<DecorPlacement> out) {
-        DecorKind[] kinds = {DecorKind.TREE_OAK_1, DecorKind.TREE_OAK_2, DecorKind.TREE_OAK_3, DecorKind.TREE_DECIDUOUS,
-                DecorKind.TREE_PINE_1, DecorKind.TREE_PINE_2, DecorKind.TREE_PINE_3, DecorKind.BUSH};
+    private static void placePerimeter(MapTheme theme, Random rng, List<DecorPlacement> out) {
+        List<DecorKind> kinds = theme.perimeterKinds();
+        boolean sky = theme.biome().hasSky();
         List<double[]> placed = new ArrayList<>();
         for (int attempts = 0; placed.size() < theme.trees() && attempts < 3000; attempts++) {
             double gx = -8 + rng.nextDouble() * (SIZE + 15);
             double gy = -8 + rng.nextDouble() * (SIZE + 15);
             if (gx > -1.2 && gx < SIZE + 0.2 && gy > -1.2 && gy < SIZE + 0.2) continue; // trop près du terrain
-            if (gx + gy < MIN_TREE_DEPTH) continue;                                     // derrière l'arène
-            DecorKind kind = kinds[rng.nextInt(kinds.length)];
+            if (sky && gx + gy < MIN_TREE_DEPTH) continue;                              // derrière l'arène
+            DecorKind kind = kinds.get(rng.nextInt(kinds.size()));
             if (occludesArena(gx, gy, kind)) continue;
             if (tooClose(placed, gx, gy, 1.5)) continue;
             placed.add(new double[] {gx, gy});

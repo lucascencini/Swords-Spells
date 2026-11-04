@@ -21,7 +21,7 @@ import java.util.Random;
 /**
  * Point d'entrée. Options (toutes facultatives) :
  * <pre>
- *   --map forest|ruins|lake          ambiance de la carte (sinon aléatoire)
+ *   --map forest|ruins|lake|snow|desert|dungeon   carte (sinon aléatoire)
  *   --seed 1234                      graine de la carte (pour rejouer exactement la même)
  *   --red warrior,archer             composition de l'équipe rouge (1 à 3 parmi warrior, mage, archer)
  *   --blue mage                      composition de l'équipe bleue
@@ -94,7 +94,10 @@ public final class Main {
             case "forest", "foret", "forêt" -> MapTheme.FOREST;
             case "ruins", "ruines" -> MapTheme.RUINS;
             case "lake", "lac" -> MapTheme.LAKE;
-            default -> throw new IllegalArgumentException("Carte inconnue : " + value + " (forest, ruins, lake)");
+            case "snow", "neige" -> MapTheme.SNOW;
+            case "desert", "désert" -> MapTheme.DESERT;
+            case "dungeon", "donjon", "crypte" -> MapTheme.DUNGEON;
+            default -> throw new IllegalArgumentException("Carte inconnue : " + value + " (forest, ruins, lake, snow, desert, dungeon)");
         };
     }
 }

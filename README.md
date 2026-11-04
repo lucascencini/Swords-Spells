@@ -30,7 +30,7 @@ Le JAR seul se lance avec `java -jar build/mini-dofus.jar`. Options :
 |---|---|
 | `--red warrior,archer` · `--blue mage,mage,warrior` | composition des équipes (1 à 3 parmi `warrior`, `mage`, `archer`) |
 | `--ai easy\|normal\|hard` · `--ai-red …` | l'ordinateur joue l'équipe bleue (ou rouge) |
-| `--map forest\|ruins\|lake` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
+| `--map forest\|ruins\|lake\|snow\|desert\|dungeon` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
 
 Exemple : `java -jar build/mini-dofus.jar --red warrior,archer --blue mage,warrior --ai hard`.
 
@@ -80,6 +80,19 @@ Les valeurs exactes (dégâts, portées, relances) sont dans l'info-bulle de cha
 moyenne) et garde celle qui mène à la meilleure situation. *Facile* choisit souvent un coup correct
 sans être le meilleur ; *Normal* joue le meilleur coup et se place selon sa classe ; *Difficile*
 anticipe aussi la riposte adverse.
+
+## Cartes
+
+| Carte | Biome | Particularité |
+|---|---|---|
+| Clairière forestière | prairie | rochers et rondins |
+| Ruines anciennes | prairie | chemin pavé, caisses |
+| Bord de lac | prairie | étang infranchissable |
+| Col enneigé | neige | lac gelé (praticable), sapins enneigés, flocons |
+| Désert brûlant | désert | oasis, cactus (destructibles), poussière |
+| Crypte oubliée | souterrain | piliers, torches et braises |
+
+Chaque carte a son ambiance sonore en boucle (coupée avec `M`).
 
 ## Architecture
 
@@ -158,7 +171,11 @@ une nouvelle sans recharger.
   `ui/Icons.java`.
 - **Assets** : `tools/build_assets.py` régénère `src/main/resources/` depuis le dossier `assets/`
   d'origine (tri, suppression des pixels parasites du découpage, normalisation des tuiles,
-  conversion OGG → WAV car Java ne lit pas l'OGG). Nécessite Python 3 (Pillow, numpy, scipy) et ffmpeg.
+  conversion OGG → WAV car Java ne lit pas l'OGG). Il fabrique aussi ce que le pack ne contient pas :
+  sols de neige, de sable et de crypte (recoloration des tuiles d'herbe et de pierre), sapins enneigés,
+  cactus dessinés, Archère (recoloration du Mage). Nécessite Python 3 (Pillow, numpy, scipy) et ffmpeg.
+- **Ambiances sonores** : `tools/ambience.py` les synthétise (bruit filtré et oscillateurs, boucles de
+  16 s sans couture). Aucun fichier extérieur ; modifiez le script pour changer le caractère d'une carte.
 
 ## Tests
 

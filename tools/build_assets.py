@@ -142,6 +142,162 @@ def recolor_blue_to_green(img: Image.Image) -> Image.Image:
     return Image.fromarray((np.concatenate([out, alpha], axis=2) * 255).astype(np.uint8), "RGBA")
 
 
+# ---------------------------------------------------------------------------- biomes
+
+def _hsv(img: Image.Image):
+    rgba = np.array(img.convert("RGBA"))
+    hsv = np.array(Image.fromarray(rgba[:, :, :3]).convert("HSV")).astype(np.float32) / 255.0
+    return rgba[:, :, 3:], hsv
+
+
+def _from_hsv(alpha, hsv) -> Image.Image:
+    rgb = np.array(Image.fromarray((np.clip(hsv, 0, 1) * 255).astype(np.uint8), "HSV").convert("RGB"))
+    return Image.fromarray(np.concatenate([rgb, alpha], axis=2), "RGBA")
+
+
+def _green_mask(hsv):
+    hue = hsv[:, :, 0] * 360
+    return (hue > 40) & (hue < 170) & (hsv[:, :, 1] > 0.18)
+
+
+def to_snow(img: Image.Image) -> Image.Image:
+    """Herbe → neige (blanc légèrement bleuté, variations de luminosité conservées)."""
+    alpha, hsv = _hsv(img)
+    g = _green_mask(hsv)
+    hsv[:, :, 0] = np.where(g, 210 / 360, hsv[:, :, 0])
+    hsv[:, :, 1] = np.where(g, 0.05 + 0.08 * (1 - hsv[:, :, 2]), hsv[:, :, 1] * 0.8)
+    hsv[:, :, 2] = np.where(g, 0.78 + 0.22 * hsv[:, :, 2], hsv[:, :, 2] * 0.92)
+    return _from_hsv(alpha, hsv)
+
+
+def to_sand(img: Image.Image) -> Image.Image:
+    """Herbe → sable chaud."""
+    alpha, hsv = _hsv(img)
+    g = _green_mask(hsv)
+    hsv[:, :, 0] = np.where(g, 40 / 360, hsv[:, :, 0])
+    hsv[:, :, 1] = np.where(g, hsv[:, :, 1] * 0.55, hsv[:, :, 1])
+    hsv[:, :, 2] = np.where(g, np.minimum(1, hsv[:, :, 2] * 1.12), hsv[:, :, 2])
+    return _from_hsv(alpha, hsv)
+
+
+def to_dungeon(img: Image.Image, value: float) -> Image.Image:
+    """Dalle → pierre froide de crypte ; la mousse devient sombre."""
+    alpha, hsv = _hsv(img)
+    g = _green_mask(hsv)
+    hsv[:, :, 0] = np.where(g, 100 / 360, 220 / 360)
+    hsv[:, :, 1] = np.where(g, hsv[:, :, 1] * 0.28, 0.10)
+    hsv[:, :, 2] = np.where(g, hsv[:, :, 2] * value * 0.75, hsv[:, :, 2] * value)
+    return _from_hsv(alpha, hsv)
+
+
+def to_ice(img: Image.Image) -> Image.Image:
+    """Eau → glace pâle."""
+    alpha, hsv = _hsv(img)
+    blue = (hsv[:, :, 0] * 360 > 170) & (hsv[:, :, 0] * 360 < 250)
+    hsv[:, :, 0] = np.where(blue, 195 / 360, hsv[:, :, 0])
+    hsv[:, :, 1] = np.where(blue, hsv[:, :, 1] * 0.32, hsv[:, :, 1])
+    hsv[:, :, 2] = np.where(blue, np.minimum(1, 0.55 + hsv[:, :, 2] * 0.55), hsv[:, :, 2])
+    return _from_hsv(alpha, hsv)
+
+
+def darker(img: Image.Image, factor: float) -> Image.Image:
+    alpha, hsv = _hsv(img)
+    hsv[:, :, 2] *= factor
+    return _from_hsv(alpha, hsv)
+
+
+def snow_capped(img: Image.Image) -> Image.Image:
+    """Ajoute de la neige sur les parties claires (aiguilles de pin, dessus des rochers)."""
+    rgba = np.array(img.convert("RGBA")).astype(np.float32)
+    alpha = rgba[:, :, 3:]
+    rgb = rgba[:, :, :3] / 255.0
+    lum = rgb.mean(axis=2, keepdims=True)
+    h = rgb.shape[0]
+    height_bias = np.linspace(1.15, 0.85, h).reshape(h, 1, 1)
+    k = np.clip((lum * height_bias - 0.27) * 3.6, 0, 1)
+    snow = np.array([0.93, 0.96, 1.0]).reshape(1, 1, 3)
+    out = rgb * (1 - k) + snow * k
+    return Image.fromarray(np.concatenate([out * 255, alpha], axis=2).astype(np.uint8), "RGBA")
+
+
+def tint(img: Image.Image, hue: float, sat_mul: float, val_mul: float) -> Image.Image:
+    alpha, hsv = _hsv(img)
+    hsv[:, :, 0] = hue / 360
+    hsv[:, :, 1] = np.minimum(1, hsv[:, :, 1] * sat_mul + 0.05)
+    hsv[:, :, 2] = np.minimum(1, hsv[:, :, 2] * val_mul)
+    return _from_hsv(alpha, hsv)
+
+
+def draw_cactus(arms: int, seed: int) -> Image.Image:
+    """Cactus en pixel art (le pack n'en contient pas) : dessiné à 4× puis réduit pour adoucir les bords."""
+    from PIL import ImageDraw
+    rng = np.random.default_rng(seed)
+    S = 4
+    W, H = 46, 84
+    img = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    dark, mid, light = (46, 92, 52, 255), (74, 140, 70, 255), (128, 186, 96, 255)
+    outline = (30, 52, 30, 255)
+
+    def column(x0, y0, x1, y1):
+        d.rounded_rectangle([x0 * S, y0 * S, x1 * S, y1 * S], radius=(x1 - x0) * S // 2, fill=outline)
+        d.rounded_rectangle([(x0 + 1) * S, (y0 + 1) * S, (x1 - 1) * S, (y1 - 1) * S], radius=(x1 - x0 - 2) * S // 2, fill=mid)
+        d.rectangle([(x0 + 2) * S, (y0 + 4) * S, (x0 + 4) * S, (y1 - 3) * S], fill=light)
+        d.rectangle([(x1 - 4) * S, (y0 + 4) * S, (x1 - 2) * S, (y1 - 3) * S], fill=dark)
+
+    column(16, 6, 30, 80)
+    if arms >= 1:
+        column(4, 24, 14, 50)
+        d.rectangle([10 * S, 44 * S, 18 * S, 50 * S], fill=outline)
+        d.rectangle([10 * S, 45 * S, 18 * S, 49 * S], fill=mid)
+    if arms >= 2:
+        column(32, 14, 42, 40)
+        d.rectangle([28 * S, 34 * S, 36 * S, 40 * S], fill=outline)
+        d.rectangle([28 * S, 35 * S, 36 * S, 39 * S], fill=mid)
+    for _ in range(40):
+        x = int(rng.integers(5, W - 5)) * S
+        y = int(rng.integers(8, H - 8)) * S
+        if img.getpixel((x, y))[3] > 0:
+            d.point([(x, y), (x + 1, y), (x, y + 1)], fill=(235, 230, 200, 255))
+    d.ellipse([12 * S, 77 * S, 34 * S, 83 * S], fill=(120, 96, 60, 255))
+    return img.resize((W, H), Image.LANCZOS)
+
+
+def build_biomes(src: Path, dst: Path):
+    tiles = dst / "tiles"
+    grass = [load(tiles / f"grass_{i}.png") for i in range(1, 7)]
+    stone = load(tiles / "stone.png")
+    water = load(tiles / "water.png")
+    for i, g in enumerate(grass, start=1):
+        save(to_snow(g), tiles / f"snow_{i}.png")
+        save(to_sand(g), tiles / f"sand_{i}.png")
+    save(to_snow(stone), tiles / "snow_stone.png")
+    save(to_ice(water), tiles / "ice.png")
+    save(to_sand(tint(stone, 36, 0.75, 1.08)), tiles / "sand_stone.png")
+    variants = [stone, stone.transpose(Image.FLIP_LEFT_RIGHT), stone, stone.transpose(Image.FLIP_LEFT_RIGHT), stone, stone]
+    for i, (v, value) in enumerate(zip(variants, [0.62, 0.66, 0.56, 0.6, 0.7, 0.52]), start=1):
+        save(to_dungeon(v, value), tiles / f"dungeon_{i}.png")
+    save(to_dungeon(stone, 0.42), tiles / "dungeon_stone.png")
+    save(darker(water, 0.55), tiles / "dungeon_water.png")
+
+    decor = dst / "decor"
+    for name in ("tree_pine_1", "tree_pine_2", "tree_pine_3", "bush"):
+        save(snow_capped(load(decor / f"{name}.png")), decor / f"snow_{name}.png")
+    for name in ("rock_cluster_1", "rock_cluster_2"):
+        rock = load(decor / f"{name}.png")
+        save(snow_capped(tint(rock, 215, 0.5, 1.0)), decor / f"snow_{name}.png")
+        save(tint(rock, 28, 1.8, 1.05), decor / f"desert_{name}.png")
+    save(tint(load(decor / "bush.png"), 38, 0.8, 0.95), decor / "dry_bush.png")
+    save(draw_cactus(2, 1), decor / "cactus_1.png")
+    save(draw_cactus(1, 2), decor / "cactus_2.png")
+    save(draw_cactus(0, 3), decor / "cactus_3.png")
+    save(trim(keep_main_components(load(src / "pilier_pierre.png"), 0.4)), decor / "pillar.png")
+    save(trim(keep_main_components(load(src / "misc/stone_monument.png"), 0.4)), decor / "monument.png")
+    save(trim(keep_main_components(load(src / "torche.png"), 0.3)), decor / "torch.png")
+    save(trim(load(src / "misc/rocks_small.png")), decor / "debris_1.png")
+    save(trim(load(src / "misc/rocks_tiny.png")), decor / "debris_2.png")
+
+
 def save(img: Image.Image, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path, optimize=True)
@@ -172,6 +328,8 @@ def main():
     save(recolor_blue_to_green(trim(keep_main_components(load(src / PORTRAITS["mage"]), 0.5))), dst / "ui" / "portrait_archer.png")
     for name, rel in ICONS.items():
         save(trim(keep_main_components(load(src / rel), 0.5)), dst / "ui" / f"icon_{name}.png")
+
+    build_biomes(src, dst)
 
     (dst / "sounds").mkdir(parents=True, exist_ok=True)
     for name in SOUNDS:

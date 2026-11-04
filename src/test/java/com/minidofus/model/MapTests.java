@@ -16,6 +16,8 @@ public final class MapTests {
         Check.suite("Génération de cartes (" + MapTheme.values().length + " ambiances x 300 graines)");
         int lakeWithWater = 0;
         int pathWithStone = 0;
+        int frozen = 0;
+        int oasis = 0;
         int problems = 0;
         for (MapTheme theme : MapTheme.values()) {
             for (long seed = 0; seed < 300; seed++) {
@@ -30,6 +32,7 @@ public final class MapTests {
                 int obstacles = 0;
                 int water = 0;
                 int stone = 0;
+                int ice = 0;
                 for (int x = 0; x < board.size(); x++) {
                     for (int y = 0; y < board.size(); y++) {
                         Cell c = new Cell(x, y);
@@ -44,13 +47,18 @@ public final class MapTests {
                         }
                         if (board.terrain(x, y) == Terrain.WATER) water++;
                         if (board.terrain(x, y) == Terrain.STONE) stone++;
+                        if (board.terrain(x, y) == Terrain.ICE) ice++;
                     }
                 }
                 long blockingDecor = a.decor().stream().filter(d -> d.kind().isBlocking()).count();
                 if (blockingDecor != obstacles) { problems++; Check.that(false, tag + " : décor bloquant != obstacles"); }
                 if (theme == MapTheme.LAKE && water >= 10) lakeWithWater++;
                 if (theme == MapTheme.RUINS && stone >= 20) pathWithStone++;
-                if (theme != MapTheme.LAKE && water != 0) { problems++; Check.that(false, tag + " : eau hors ambiance lac"); }
+                if (theme == MapTheme.SNOW && ice >= 10) frozen++;
+                if (theme == MapTheme.DESERT && water >= 5) oasis++;
+                if (theme != MapTheme.SNOW && ice != 0) { problems++; Check.that(false, tag + " : glace hors montagne"); }
+                boolean wet = theme.feature() == MapTheme.Feature.LAKE || theme.feature() == MapTheme.Feature.OASIS;
+                if (!wet && water != 0) { problems++; Check.that(false, tag + " : eau hors lac et oasis"); }
 
                 for (DecorPlacement d : a.decor()) {
                     if (d.kind().role() == DecorKind.Role.TREE) {
@@ -66,6 +74,8 @@ public final class MapTests {
         }
         Check.equal(300, lakeWithWater, "chaque carte « lac » contient un étang d'au moins 10 cases");
         Check.equal(300, pathWithStone, "chaque carte « ruines » a un chemin de pierre");
+        Check.equal(300, frozen, "chaque carte « neige » a un lac gelé");
+        Check.equal(300, oasis, "chaque carte « désert » a une oasis");
         Check.equal(0, problems, "toutes les cartes générées sont valides");
 
         Check.suite("Reproductibilité des cartes");
