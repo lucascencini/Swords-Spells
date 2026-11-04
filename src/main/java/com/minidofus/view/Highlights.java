@@ -1,0 +1,73 @@
+package com.minidofus.view;
+
+import com.minidofus.model.Cell;
+
+import java.awt.Color;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/** Cases à colorer sur le sol, reconstruites uniquement quand l'état ou le survol change. */
+public final class Highlights {
+
+    /** Styles de surbrillance, du plus discret au plus visible. */
+    public enum Style {
+        REACH(new Color(46, 204, 113), 0.30, 0.55),
+        PATH(new Color(120, 255, 160), 0.55, 0.95),
+        RANGE(new Color(243, 156, 18), 0.18, 0.40),
+        RANGE_ENEMY(new Color(243, 156, 18), 0.32, 0.60),
+        IMPACT(new Color(255, 107, 53), 0.50, 0.95),
+        IMPACT_ENEMY(new Color(231, 76, 60), 0.65, 1.0),
+        SELF_HEAL(new Color(46, 204, 113), 0.55, 0.95),
+        SELF_BUFF(new Color(52, 152, 219), 0.55, 0.95);
+
+        final Color color;
+        final double fill;
+        final double border;
+
+        Style(Color color, double fill, double border) {
+            this.color = color;
+            this.fill = fill;
+            this.border = border;
+        }
+    }
+
+    private final Map<Cell, Style> cells = new LinkedHashMap<>();
+    private Cell hover;
+    private String label;
+    private Cell labelCell;
+
+    public void clear() {
+        cells.clear();
+        label = null;
+        labelCell = null;
+    }
+
+    public void put(Cell cell, Style style) {
+        cells.put(cell, style);
+    }
+
+    public Map<Cell, Style> cells() {
+        return cells;
+    }
+
+    public void setHover(Cell hover) {
+        this.hover = hover;
+    }
+
+    public Cell hover() {
+        return hover;
+    }
+
+    public void setLabel(Cell cell, String text) {
+        this.labelCell = cell;
+        this.label = text;
+    }
+
+    public String label() {
+        return label;
+    }
+
+    public Cell labelCell() {
+        return labelCell;
+    }
+}
