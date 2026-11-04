@@ -12,23 +12,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Charge en ligne droite : le lanceur fonce vers la case visée, s'arrête devant le premier obstacle
- * ou ennemi, et frappe l'ennemi rencontré. La distance parcourue est celle de la case cliquée
- * (le prototype parcourait toujours la portée maximale, quelle que soit la case visée).
+ * Charge en ligne droite vers la case visée : le lanceur s'arrête devant le premier obstacle ou
+ * combattant. Il frappe l'ennemi ou la caisse rencontrée (jamais un allié).
  */
 public final class ChargeSpell extends AbstractSpell {
 
     private final IntRange damage;
 
-    public ChargeSpell(String id, String name, int cost, int minRange, int maxRange, IntRange damage) {
-        super(id, name, cost, minRange, maxRange, TargetMode.LINE, CastStyle.DASH);
+    public ChargeSpell(Base base, IntRange damage) {
+        super(base.inLine().noLineOfSight(), TargetMode.LINE, CastStyle.DASH);
         this.damage = damage;
     }
 
-    /** Trajet prévu : cases parcourues et ennemi percuté (éventuellement {@code null}). */
-    public record Plan(List<Cell> path, Fighter hit) {
+    public IntRange damage() { return damage; }
+
+    /** Trajet prévu : cases parcourues, ennemi ou caisse percutés (éventuellement aucun). */
+    public record Plan(List<Cell> path, Fighter hitFighter, Cell hitObstacle) {
         public boolean isEmpty() {
-            return path.isEmpty() && hit == null;
+            return path.isEmpty() && hitFighter == null && hitObstacle == null;
         }
     }
 
@@ -36,50 +37,46 @@ public final class ChargeSpell extends AbstractSpell {
         Cell from = caster.position();
         int dx = Integer.signum(target.x() - from.x());
         int dy = Integer.signum(target.y() - from.y());
-        int steps = from.distanceTo(target);
         List<Cell> path = new ArrayList<>();
-        Fighter hit = null;
         Cell current = from;
-        for (int i = 0; i < steps; i++) {
+        for (int i = 0; i < from.distanceTo(target); i++) {
             Cell next = current.plus(dx, dy);
-            if (!ctx.board().isWalkable(next)) break;
             Fighter other = ctx.fighterAt(next);
-            if (other != null) {
-                if (other != caster) hit = other;
-                break;
+            if (other != null) return new Plan(path, other.isEnemyOf(caster) ? other : null, null);
+            if (!ctx.board().isWalkable(next)) {
+                return new Plan(path, null, ctx.board().isDestructible(next) ? next : null);
             }
             path.add(next);
             current = next;
         }
-        return new Plan(path, hit);
+        return new Plan(path, null, null);
     }
 
     @Override
     public String effectSummary() {
-        return damage + " dégâts";
+        return damage + " dégâts au premier ennemi ou caisse rencontré";
     }
 
     @Override
     public boolean canTarget(SpellContext ctx, Fighter caster, Cell target) {
-        return inRange(caster, target)
-                && caster.position().isAlignedWith(target)
-                && !plan(ctx, caster, target).isEmpty();
+        return reachable(ctx, caster, target) && !plan(ctx, caster, target).isEmpty();
     }
 
     @Override
     public List<Cell> impactCells(SpellContext ctx, Fighter caster, Cell target) {
         Plan plan = plan(ctx, caster, target);
         List<Cell> cells = new ArrayList<>(plan.path());
-        if (plan.hit() != null) cells.add(plan.hit().position());
+        if (plan.hitFighter() != null) cells.add(plan.hitFighter().position());
+        if (plan.hitObstacle() != null) cells.add(plan.hitObstacle());
         return cells;
     }
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
         Plan plan = plan(ctx, caster, target);
-        ctx.moveFighter(caster, plan.path(), MoveStyle.DASH);
-        if (plan.hit() != null) {
-            ctx.dealDamage(caster, plan.hit(), damage.roll(ctx.rng()), style());
-        }
+        int moved = ctx.moveFighter(caster, plan.path(), MoveStyle.DASH);
+        if (moved < plan.path().size() || !caster.isAlive()) return; // arrêté par un piège
+        if (plan.hitFighter() != null) ctx.dealDamage(caster, plan.hitFighter(), ctx.roll(damage), style());
+        else if (plan.hitObstacle() != null) ctx.damageObstacle(caster, plan.hitObstacle(), ctx.roll(damage), style());
     }
 }

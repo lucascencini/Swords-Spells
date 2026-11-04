@@ -2,6 +2,7 @@ package com.minidofus.ui;
 
 import com.minidofus.model.Fighter;
 import com.minidofus.model.Spell;
+import com.minidofus.model.Team;
 import com.minidofus.view.FighterView;
 
 import java.util.List;
@@ -9,21 +10,33 @@ import java.util.List;
 /** Ce que le HUD a besoin de lire de la partie (il ne modifie jamais rien lui-même). */
 public interface HudModel {
 
-    /** Combattant de gauche puis de droite. */
+    /** Tous les combattants (équipe rouge puis bleue). */
     List<FighterView> fighterViews();
 
     Fighter active();
 
-    int turn();
+    /** Ordre de jeu fixé par l'initiative. */
+    List<Fighter> turnOrder();
+
+    int round();
 
     boolean isBusy();
 
+    /** Faux pendant le tour de l'ordinateur. */
+    boolean isHumanTurn();
+
     boolean isOver();
 
-    Fighter winner();
+    Team winner();
+
+    /** Équipe du joueur quand il affronte l'ordinateur, {@code null} à deux joueurs. */
+    Team soloHumanTeam();
 
     /** Sort sélectionné, ou {@code null} en mode déplacement. */
     Spell selectedSpell();
+
+    /** Pourquoi le sort ne peut pas être lancé maintenant (relance, PA, silence), ou {@code null}. */
+    String unavailableReason(Spell spell);
 
     String mapName();
 

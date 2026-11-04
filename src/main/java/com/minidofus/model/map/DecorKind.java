@@ -1,16 +1,16 @@
 package com.minidofus.model.map;
 
 /**
- * Éléments de décor. {@code role} dit s'ils bloquent le jeu ; {@code occlusionRows} et
+ * Éléments de décor. {@code role} dit s'ils bloquent le jeu, {@code durability} s'ils peuvent être détruits ; {@code occlusionRows} et
  * {@code halfWidth} décrivent grossièrement l'emprise à l'écran (en rangées iso et en unités x-y) pour
  * empêcher un grand arbre de masquer le terrain de jeu.
  */
 public enum DecorKind {
     ROCK_CLUSTER_1("rock_cluster_1", Role.OBSTACLE, 0.66, 0, 0),
     ROCK_CLUSTER_2("rock_cluster_2", Role.OBSTACLE, 0.62, 0, 0),
-    CRATE_1("crate_1", Role.OBSTACLE, 1.15, 0, 0),
-    CRATE_2("crate_2", Role.OBSTACLE, 1.0, 0, 0),
-    FALLEN_LOG("fallen_log", Role.OBSTACLE, 0.72, 0, 0),
+    CRATE_1("crate_1", Role.OBSTACLE, 1.15, 0, 0, 24),
+    CRATE_2("crate_2", Role.OBSTACLE, 1.0, 0, 0, 24),
+    FALLEN_LOG("fallen_log", Role.OBSTACLE, 0.72, 0, 0, 18),
 
     TREE_OAK_1("tree_oak_1", Role.TREE, 0.82, 7.0, 2.2),
     TREE_OAK_2("tree_oak_2", Role.TREE, 0.80, 7.5, 2.6),
@@ -34,8 +34,14 @@ public enum DecorKind {
     private final double baseScale;
     private final double occlusionRows;
     private final double halfWidth;
+    private final int durability;
 
     DecorKind(String spriteKey, Role role, double baseScale, double occlusionRows, double halfWidth) {
+        this(spriteKey, role, baseScale, occlusionRows, halfWidth, 0);
+    }
+
+    DecorKind(String spriteKey, Role role, double baseScale, double occlusionRows, double halfWidth, int durability) {
+        this.durability = durability;
         this.spriteKey = spriteKey;
         this.role = role;
         this.baseScale = baseScale;
@@ -50,4 +56,6 @@ public enum DecorKind {
     public double occlusionRows() { return occlusionRows; }
     public double halfWidth() { return halfWidth; }
     public boolean isBlocking() { return role == Role.OBSTACLE; }
+    /** Points de structure si l'obstacle est destructible, 0 sinon. */
+    public int durability() { return durability; }
 }

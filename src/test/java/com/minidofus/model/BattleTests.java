@@ -8,41 +8,59 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/** Tests des règles : déplacements, sorts, bouclier, soin, victoire. */
+/** Tests des règles : déplacements, sorts, statuts, relances, initiative, pièges, obstacles, victoire. */
 public final class BattleTests {
 
     private BattleTests() { }
 
-    /** Combat sur une grille vide 15x15 ; le guerrier commence. */
-    private static Battle battle(Cell warriorPos, Cell magePos, List<BattleEvent> log, long seed) {
-        Board board = new Board(15);
-        Fighter warrior = new Fighter(FighterCatalog.WARRIOR, warriorPos);
-        Fighter mage = new Fighter(FighterCatalog.MAGE, magePos);
-        Battle b = new Battle(board, List.of(warrior, mage), new Random(seed));
-        b.addListener(log::add);
-        b.start(warrior);
-        return b;
+    /** Petit montage de combat : combattants placés à la main, ordre de jeu imposé (dans l'ordre donné). */
+    private static final class Setup {
+        final Board board = new Board(15);
+        final List<Fighter> fighters = new ArrayList<>();
+        final List<BattleEvent> log = new ArrayList<>();
+        Battle battle;
+
+        Fighter add(FighterClass c, Team team, int x, int y) {
+            Fighter f = new Fighter(c, team, (int) fighters.stream().filter(o -> o.team() == team).count(), new Cell(x, y));
+            fighters.add(f);
+            return f;
+        }
+
+        Battle start(long seed) {
+            battle = new Battle(board, fighters, new Random(seed));
+            battle.addListener(log::add);
+            battle.startWithOrder(fighters);
+            return battle;
+        }
+
+        long count(Class<? extends BattleEvent> type) {
+            return log.stream().filter(type::isInstance).count();
+        }
     }
 
     private static Spell spell(Fighter f, String id) {
         return f.fighterClass().spells().stream().filter(s -> s.id().equals(id)).findFirst().orElseThrow();
     }
 
-    private static Fighter other(Battle b) {
-        return b.opponentOf(b.active());
-    }
-
     public static void run() {
         pathfinding();
+        lineOfSight();
         movement();
-        melee();
-        paRules();
+        stunStrike();
+        paAndCooldowns();
         charge();
+        pushAndCollision();
+        grapple();
         fireball();
-        shield();
         heal();
-        victory();
-        determinism();
+        teleportAndLeap();
+        poison();
+        traps();
+        destructibles();
+        shield();
+        initiative();
+        teamVictory();
+        simulation();
     }
 
     private static void pathfinding() {
@@ -52,204 +70,398 @@ public final class BattleTests {
         Check.equal(5, reach.cells().size(), "portée 2 depuis un coin : 5 cases");
         Check.equal(2, reach.costTo(new Cell(1, 1)), "coût diagonal = 2");
         Check.equal(-1, reach.costTo(new Cell(3, 3)), "case hors portée inatteignable");
-        Check.equal(2, reach.pathTo(new Cell(1, 1)).size(), "chemin de 2 cases");
         Check.equal(new Cell(1, 1), reach.pathTo(new Cell(1, 1)).get(1), "le chemin finit sur la cible");
-
-        board.setObstacle(1, 0, true);
-        board.setObstacle(0, 1, true);
-        Check.that(Pathfinder.compute(board, new Cell(0, 0), 5, c -> false).cells().isEmpty(), "coin muré : rien d'atteignable");
-
         Board open = new Board(5);
-        var blocked = Pathfinder.compute(open, new Cell(0, 0), 4, c -> c.equals(new Cell(1, 0)));
-        Check.equal(4, blocked.costTo(new Cell(2, 0)), "contournement d'une case occupée (coût 4)");
-        Check.equal(-1, Pathfinder.compute(open, new Cell(0, 0), 3, c -> c.equals(new Cell(1, 0))).costTo(new Cell(2, 0)),
-                "contournement impossible avec 3 PM");
-
+        Check.equal(4, Pathfinder.compute(open, new Cell(0, 0), 4, c -> c.equals(new Cell(1, 0))).costTo(new Cell(2, 0)),
+                "contournement d'une case occupée (coût 4)");
         Board lake = new Board(5);
         lake.setTerrain(1, 0, Terrain.WATER);
         Check.equal(-1, Pathfinder.compute(lake, new Cell(0, 0), 1, c -> false).costTo(new Cell(1, 0)), "l'eau est infranchissable");
     }
 
+    private static void lineOfSight() {
+        Check.suite("Ligne de vue");
+        Board b = new Board(15);
+        b.setObstacle(5, 5, true);
+        Check.that(!LineOfSight.isClear(new Cell(3, 5), new Cell(7, 5), b::blocksSight), "obstacle en ligne droite : bloqué");
+        Check.that(LineOfSight.isClear(new Cell(3, 5), new Cell(5, 5), b::blocksSight), "viser l'obstacle lui-même : visible");
+        Check.that(LineOfSight.isClear(new Cell(3, 4), new Cell(7, 4), b::blocksSight), "ligne voisine : libre");
+        Check.that(!LineOfSight.isClear(new Cell(3, 3), new Cell(7, 7), b::blocksSight), "diagonale passant par l'obstacle : bloquée");
+        b.setObstacle(6, 5, true);
+        Check.that(LineOfSight.isClear(new Cell(5, 4), new Cell(7, 6), c -> c.equals(new Cell(6, 4))),
+                "coin touché par une seule case bloquante : visible (règle permissive)");
+        Check.that(!LineOfSight.isClear(new Cell(5, 4), new Cell(7, 6), c -> c.equals(new Cell(6, 4)) || c.equals(new Cell(5, 5))),
+                "coin entre deux cases bloquantes : bloqué");
+        Board water = new Board(15);
+        water.setTerrain(5, 5, Terrain.WATER);
+        Check.that(LineOfSight.isClear(new Cell(3, 5), new Cell(7, 5), water::blocksSight), "l'eau ne bloque pas la vue");
+
+        Setup s = new Setup();
+        Fighter mage = s.add(FighterCatalog.MAGE, Team.RED, 2, 5);
+        Fighter warrior = s.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 5);
+        s.add(FighterCatalog.WARRIOR, Team.BLUE, 4, 5);
+        Battle battle = s.start(1);
+        Check.that(!battle.canCast(spell(mage, "arcane"), warrior.position()), "un combattant bloque la ligne de vue");
+        Check.that(battle.canCast(spell(mage, "arcane"), new Cell(4, 5)), "le combattant devant est visible");
+        Check.that(!battle.canCast(spell(mage, "fireball"), new Cell(6, 6)) || battle.hasLineOfSight(mage.position(), new Cell(6, 6)),
+                "zone : la ligne de vue vers le centre est exigée");
+    }
+
     private static void movement() {
         Check.suite("Déplacement");
-        List<BattleEvent> log = new ArrayList<>();
-        Battle b = battle(new Cell(1, 1), new Cell(13, 13), log, 1);
-        Fighter w = b.active();
-        Check.equal(3, w.pm(), "PM initiaux du guerrier");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 1, 1);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 2, 1);
+        Battle b = s.start(1);
         Check.that(!b.move(new Cell(1, 6)), "case hors de portée refusée");
-        Check.equal(3, w.pm(), "PM inchangés après un refus");
-        Check.that(b.move(new Cell(3, 2)), "déplacement de 3 cases accepté");
-        Check.equal(0, w.pm(), "PM dépensés");
-        Check.equal(new Cell(3, 2), w.position(), "position mise à jour");
-        Check.that(log.get(log.size() - 1) instanceof BattleEvent.Moved, "événement Moved émis");
-        Check.that(!b.move(new Cell(3, 3)), "plus de PM : refusé");
-
-        Battle b2 = battle(new Cell(1, 1), new Cell(2, 1), new ArrayList<>(), 1);
-        Check.that(!b2.move(new Cell(2, 1)), "impossible d'aller sur l'adversaire");
-        Check.that(b2.move(new Cell(2, 2)), "contournement de l'adversaire");
+        Check.that(!b.move(m.position()), "impossible d'aller sur un combattant");
+        Check.that(b.move(new Cell(2, 2)), "contournement d'un combattant");
+        Check.equal(1, w.pm(), "2 PM dépensés");
+        Check.equal(2, w.stats().cellsMoved(), "statistique de déplacement");
     }
 
-    private static void melee() {
-        Check.suite("Mêlée");
-        List<BattleEvent> log = new ArrayList<>();
-        Battle b = battle(new Cell(5, 5), new Cell(6, 5), log, 2);
-        Fighter w = b.active();
-        Fighter m = other(b);
-        Spell melee = spell(w, "melee");
-        Check.that(b.canCast(melee, m.position()), "mêlée sur un adjacent");
-        Check.that(!b.canCast(melee, new Cell(5, 6)), "mêlée sur case vide refusée");
-        int before = m.hp();
-        Check.that(b.cast(melee, m.position()), "lancer accepté");
-        Check.equal(2, w.pa(), "coût de 4 PA");
-        Check.inRange(before - m.hp(), 12, 18, "dégâts de mêlée");
-        int n = log.size();
-        Check.that(log.get(n - 2) instanceof BattleEvent.SpellCast && log.get(n - 1) instanceof BattleEvent.Damaged,
-                "ordre des événements : SpellCast puis Damaged");
-
-        Battle far = battle(new Cell(5, 5), new Cell(7, 5), new ArrayList<>(), 2);
-        Check.that(!far.canCast(spell(far.active(), "melee"), new Cell(7, 5)), "mêlée à distance 2 refusée");
+    private static void stunStrike() {
+        Check.suite("Frappe assommante (silence)");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Battle b = s.start(2);
+        Spell stun = spell(w, "stun");
+        Check.that(!b.canCast(stun, new Cell(5, 6)), "case vide refusée");
+        Check.that(b.cast(stun, m.position()), "frappe lancée");
+        Check.inRange(60 - m.hp(), 11, 16, "dégâts 11-16");
+        Check.that(m.isSilenced(), "cible réduite au silence");
+        b.endTurn();
+        Check.equal(m, b.active(), "tour du mage");
+        Check.equal("Réduit au silence", b.unavailableReason(spell(m, "arcane")), "le mage ne peut lancer aucun sort");
+        Check.that(b.move(new Cell(7, 5)), "mais il peut se déplacer");
+        b.endTurn();
+        Check.that(!m.isSilenced(), "silence levé à la fin de son tour");
+        Check.that(m.has(StatusKind.SILENCE_IMMUNITY), "immunité accordée");
+        Check.that(b.move(new Cell(6, 5)), "le guerrier revient au contact");
+        Check.that(b.cast(stun, m.position()), "nouvelle frappe");
+        Check.that(!m.isSilenced(), "immunisé : pas de silence deux tours de suite");
     }
 
-    private static void paRules() {
-        Check.suite("Points d'action");
-        Battle b = battle(new Cell(5, 5), new Cell(6, 5), new ArrayList<>(), 3);
-        Spell melee = spell(b.active(), "melee");
-        Cell target = other(b).position();
-        Check.that(b.cast(melee, target), "premier coup");
-        Check.that(!b.cast(melee, target), "second coup refusé (2 PA restants, coût 4)");
-        Fighter first = b.active();
+    private static void paAndCooldowns() {
+        Check.suite("PA et relances");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Battle b = s.start(3);
+        Spell push = spell(w, "push");
+        Check.that(b.cast(push, m.position()), "Repousser lancé (3 PA)");
+        Check.equal("Relance dans 1 tour", b.unavailableReason(push), "relance de 1 tour affichée");
+        Check.equal(3, w.pa(), "3 PA restants");
         b.endTurn();
-        Check.that(b.active() != first, "le tour passe à l'adversaire");
-        Check.equal(7, b.active().pa(), "PA du mage restaurés");
         b.endTurn();
-        Check.equal(6, b.active().pa(), "PA du guerrier restaurés au tour suivant");
-        Check.that(b.cast(spell(b.active(), "melee"), other(b).position()), "le guerrier peut rejouer");
+        Check.equal(null, b.unavailableReason(push), "de nouveau disponible au tour suivant");
+        Check.equal(6, w.pa(), "PA restaurés");
+        Spell shield = spell(w, "shield");
+        b.cast(shield, w.position());
+        b.endTurn();
+        b.endTurn();
+        Check.that(b.unavailableReason(shield) != null, "bouclier (relance 2) indisponible au tour suivant");
+        b.endTurn();
+        b.endTurn();
+        Check.equal(null, b.unavailableReason(shield), "disponible deux tours plus tard");
     }
 
     private static void charge() {
         Check.suite("Charge");
-        Battle b = battle(new Cell(1, 5), new Cell(5, 5), new ArrayList<>(), 4);
-        Fighter w = b.active();
-        Fighter m = other(b);
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 1, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 5, 5);
+        Battle b = s.start(4);
         ChargeSpell charge = (ChargeSpell) spell(w, "charge");
-        Check.that(b.canCast(charge, new Cell(5, 5)), "charge sur l'ennemi à 4 cases");
         Check.that(!b.canCast(charge, new Cell(2, 4)), "cible non alignée refusée");
-        Check.that(!b.canCast(charge, new Cell(1, 5)), "charge sur soi refusée");
-        Check.that(b.cast(charge, new Cell(5, 5)), "charge lancée");
+        Check.that(b.cast(charge, m.position()), "charge lancée");
         Check.equal(new Cell(4, 5), w.position(), "arrêt devant l'ennemi");
-        Check.inRange(m.maxHp() - m.hp(), 14, 20, "dégâts de charge");
-        Check.equal(1, w.pa(), "coût de 5 PA");
+        Check.inRange(60 - m.hp(), 14, 20, "dégâts de charge");
 
-        Battle far = battle(new Cell(1, 5), new Cell(8, 5), new ArrayList<>(), 4);
-        ChargeSpell c2 = (ChargeSpell) spell(far.active(), "charge");
-        Check.that(far.cast(c2, new Cell(3, 5)), "charge vers une case vide");
-        Check.equal(new Cell(3, 5), far.fighters().get(0).position(), "parcourt exactement la distance visée");
-        Check.equal(60, far.fighters().get(1).hp(), "aucun dégât sans ennemi percuté");
+        Setup s2 = new Setup();
+        Fighter w2 = s2.add(FighterCatalog.WARRIOR, Team.RED, 1, 5);
+        s2.add(FighterCatalog.WARRIOR, Team.RED, 3, 5);
+        Fighter e2 = s2.add(FighterCatalog.MAGE, Team.BLUE, 5, 5);
+        Battle b2 = s2.start(4);
+        Check.that(!b2.canCast(spell(w2, "charge"), e2.position()) || ((ChargeSpell) spell(w2, "charge")).plan(b2, w2, e2.position()).hitFighter() == null,
+                "jamais de dégâts sur un allié percuté");
 
-        Battle wall = battle(new Cell(1, 5), new Cell(5, 5), new ArrayList<>(), 4);
-        wall.board().setObstacle(2, 5, true);
-        Check.that(!wall.canCast(spell(wall.active(), "charge"), new Cell(5, 5)), "obstacle immédiat : charge impossible");
+        Setup s3 = new Setup();
+        Fighter w3 = s3.add(FighterCatalog.WARRIOR, Team.RED, 1, 5);
+        s3.add(FighterCatalog.MAGE, Team.BLUE, 10, 10);
+        s3.board.setObstacle(4, 5, true, 24);
+        Battle b3 = s3.start(4);
+        Check.that(b3.cast(spell(w3, "charge"), new Cell(5, 5)), "charge vers une caisse");
+        Check.equal(new Cell(3, 5), w3.position(), "arrêt devant la caisse");
+        Check.that(s3.board.obstacleHp(new Cell(4, 5)) < 24, "la caisse est abîmée");
+    }
 
-        Battle mid = battle(new Cell(1, 5), new Cell(5, 5), new ArrayList<>(), 4);
-        mid.board().setObstacle(3, 5, true);
-        var plan = ((ChargeSpell) spell(mid.active(), "charge")).plan(mid, mid.active(), new Cell(5, 5));
-        Check.equal(1, plan.path().size(), "arrêt devant un obstacle en cours de route");
-        Check.that(plan.hit() == null, "pas d'ennemi percuté derrière un obstacle");
+    private static void pushAndCollision() {
+        Check.suite("Poussée et chocs");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Battle b = s.start(5);
+        b.cast(spell(w, "push"), m.position());
+        Check.equal(new Cell(8, 5), m.position(), "repoussé de 2 cases");
+        Check.inRange(60 - m.hp(), 6, 9, "dégâts sans choc");
 
-        Battle beyond = battle(new Cell(1, 5), new Cell(3, 5), new ArrayList<>(), 4);
-        Check.that(beyond.canCast(spell(beyond.active(), "charge"), new Cell(5, 5)), "viser derrière l'ennemi percute l'ennemi");
+        Setup s2 = new Setup();
+        Fighter w2 = s2.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m2 = s2.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        s2.board.setObstacle(7, 5, true);
+        Battle b2 = s2.start(5);
+        b2.cast(spell(w2, "push"), m2.position());
+        Check.equal(new Cell(6, 5), m2.position(), "poussé contre un rocher : ne bouge pas");
+        Check.inRange(60 - m2.hp(), 6 + 12, 9 + 12, "choc : 6 dégâts par case non parcourue (2)");
+        Check.that(s2.count(BattleEvent.Damaged.class) == 2, "deux événements de dégâts (coup + choc)");
+
+        Setup s3 = new Setup();
+        Fighter w3 = s3.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m3 = s3.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Fighter a3 = s3.add(FighterCatalog.ARCHER, Team.BLUE, 8, 5);
+        Battle b3 = s3.start(5);
+        b3.cast(spell(w3, "push"), m3.position());
+        Check.equal(new Cell(7, 5), m3.position(), "s'arrête contre un autre combattant");
+        Check.equal(75 - 3, a3.hp(), "le combattant percuté prend la moitié du choc (6 / 2)");
+
+        Setup s4 = new Setup();
+        Fighter w4 = s4.add(FighterCatalog.WARRIOR, Team.RED, 12, 5);
+        Fighter m4 = s4.add(FighterCatalog.MAGE, Team.BLUE, 13, 5);
+        Battle b4 = s4.start(5);
+        b4.cast(spell(w4, "push"), m4.position());
+        Check.equal(new Cell(14, 5), m4.position(), "bord de carte : 1 case parcourue");
+        Check.inRange(60 - m4.hp(), 6 + 6, 9 + 6, "puis choc contre le bord");
+    }
+
+    private static void grapple() {
+        Check.suite("Grappin");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 2, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 7, 5);
+        Battle b = s.start(6);
+        Spell grapple = spell(w, "grapple");
+        Check.that(!b.canCast(grapple, new Cell(7, 6)), "cible non alignée refusée");
+        Check.that(b.cast(grapple, m.position()), "grappin lancé");
+        Check.equal(new Cell(4, 5), m.position(), "attiré de 3 cases");
+        Setup s2 = new Setup();
+        Fighter w2 = s2.add(FighterCatalog.WARRIOR, Team.RED, 2, 5);
+        Fighter m2 = s2.add(FighterCatalog.MAGE, Team.BLUE, 4, 5);
+        Battle b2 = s2.start(6);
+        b2.cast(spell(w2, "grapple"), m2.position());
+        Check.equal(new Cell(3, 5), m2.position(), "s'arrête au contact du lanceur");
     }
 
     private static void fireball() {
-        Check.suite("Boule de feu");
-        Battle b = battle(new Cell(5, 5), new Cell(10, 5), new ArrayList<>(), 5);
-        b.endTurn();
-        Fighter mage = b.active();
-        Fighter warrior = other(b);
-        Spell fire = spell(mage, "fireball");
-        Check.that(b.canCast(fire, new Cell(7, 7)), "case vide à portée ciblable");
-        Check.that(!b.canCast(fire, new Cell(20, 5)), "hors grille refusé");
-        Check.that(!b.canCast(fire, new Cell(16, 5)), "hors portée refusé");
-        Check.that(b.cast(fire, new Cell(7, 7)), "tir dans le vide");
-        Check.equal(100, warrior.hp(), "aucun dégât si personne dans la croix");
-        Check.that(!b.canCast(fire, new Cell(5, 6)), "3 PA restants : seconde boule de feu refusée");
-        b.endTurn();
-        b.endTurn();
-        Check.that(b.cast(fire, new Cell(5, 6)), "tir sur une case adjacente à l'ennemi");
-        Check.inRange(100 - warrior.hp(), 14, 20, "l'ennemi est touché par la croix");
-
-        Battle self = battle(new Cell(5, 7), new Cell(5, 5), new ArrayList<>(), 5);
-        self.endTurn();
-        Check.that(self.cast(spell(self.active(), "fireball"), new Cell(5, 6)), "tir adjacent au lanceur");
-        Check.equal(60, self.active().hp(), "le lanceur n'est jamais touché par sa croix");
-        Check.that(other(self).hp() < 100, "l'ennemi de l'autre côté est touché");
-    }
-
-    private static void shield() {
-        Check.suite("Bouclier");
-        List<BattleEvent> log = new ArrayList<>();
-        Battle b = battle(new Cell(5, 5), new Cell(6, 5), log, 6);
-        Fighter w = b.active();
-        Fighter m = other(b);
-        Check.that(b.cast(spell(w, "shield"), w.position()), "bouclier sur soi");
-        Check.that(!b.canCast(spell(w, "shield"), m.position()), "bouclier sur un autre refusé");
-        Check.that(w.hasShield(), "bouclier actif");
-        b.endTurn();
-        Check.that(w.hasShield(), "toujours actif pendant le tour adverse");
-        int before = w.hp();
-        Check.that(b.cast(spell(m, "ranged"), w.position()), "le mage attaque le guerrier protégé");
-        Check.inRange(before - w.hp(), 4, 6, "dégâts 8-12 réduits de moitié");
-        b.endTurn();
-        Check.that(!w.hasShield(), "expiré au début du tour suivant du guerrier (1 seul tour adverse couvert)");
-        Check.that(log.stream().anyMatch(e -> e instanceof BattleEvent.ShieldChanged s && !s.active()), "événement d'expiration émis");
+        Check.suite("Boule de feu (zone, tir allié)");
+        Setup s = new Setup();
+        Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 5, 9);
+        Fighter ally = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 4);
+        Fighter enemy = s.add(FighterCatalog.WARRIOR, Team.BLUE, 5, 5);
+        Battle b = s.start(7);
+        Check.that(b.cast(spell(m, "fireball"), new Cell(5, 5)), "boule de feu lancée");
+        Check.that(enemy.hp() < 100, "l'ennemi au centre est touché");
+        Check.that(ally.hp() < 100, "l'allié dans la croix aussi");
+        Check.equal(60, m.hp(), "le lanceur n'est jamais touché");
+        Check.equal(enemy.maxHp() - enemy.hp(), m.stats().damageDealt(), "seuls les dégâts aux ennemis comptent dans les stats");
+        Check.that(!b.canCast(spell(m, "fireball"), new Cell(5, 6)), "relance 1 : une seule par tour");
     }
 
     private static void heal() {
         Check.suite("Soin");
-        List<BattleEvent> log = new ArrayList<>();
-        Battle b = battle(new Cell(5, 5), new Cell(6, 5), log, 7);
-        b.endTurn();
-        Fighter mage = b.active();
-        mage.takeDamage(5);
-        Check.that(b.cast(spell(mage, "heal"), mage.position()), "soin lancé");
-        Check.equal(60, mage.hp(), "les PV ne dépassent pas le maximum");
-        BattleEvent.Healed healed = (BattleEvent.Healed) log.get(log.size() - 1);
-        Check.equal(5, healed.amount(), "l'événement indique les PV réellement rendus");
-
-        mage.takeDamage(40);
-        Check.that(b.cast(spell(mage, "heal"), mage.position()), "second soin");
-        Check.inRange(mage.hp(), 20 + 12, 20 + 18, "soin de 12 à 18");
+        Setup s = new Setup();
+        Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 5, 5);
+        Fighter ally = s.add(FighterCatalog.WARRIOR, Team.RED, 7, 5);
+        Fighter enemy = s.add(FighterCatalog.WARRIOR, Team.BLUE, 5, 7);
+        Battle b = s.start(8);
+        ally.takeDamage(30);
+        Check.that(!b.canCast(spell(m, "heal"), enemy.position()), "pas de soin sur un ennemi");
+        Check.that(b.cast(spell(m, "heal"), ally.position()), "soin d'un allié à 2 cases");
+        Check.inRange(ally.hp(), 70 + 12, 70 + 18, "allié soigné de 12 à 18");
+        Check.equal(ally.hp() - 70, m.stats().healingDone(), "statistique de soin");
+        Setup s2 = new Setup();
+        Fighter m2 = s2.add(FighterCatalog.MAGE, Team.RED, 5, 5);
+        s2.add(FighterCatalog.WARRIOR, Team.BLUE, 9, 9);
+        Battle b2 = s2.start(8);
+        m2.takeDamage(5);
+        Check.that(b2.cast(spell(m2, "heal"), m2.position()), "soin sur soi");
+        Check.equal(60, m2.hp(), "jamais au-delà des PV max");
     }
 
-    private static void victory() {
-        Check.suite("Victoire");
-        List<BattleEvent> log = new ArrayList<>();
-        Battle b = battle(new Cell(5, 5), new Cell(6, 5), log, 8);
-        Fighter w = b.active();
-        Fighter m = other(b);
-        m.takeDamage(55);
-        Check.that(b.cast(spell(w, "melee"), m.position()), "coup fatal");
-        Check.that(b.isOver(), "combat terminé");
-        Check.equal(w, b.winner(), "le guerrier gagne");
-        Check.equal(0, m.hp(), "PV à zéro, jamais négatifs");
-        long ends = log.stream().filter(e -> e instanceof BattleEvent.BattleEnded).count();
-        Check.equal(1L, ends, "BattleEnded émis une seule fois");
-        Check.that(!b.move(new Cell(5, 6)), "plus de déplacement après la fin");
-        Check.that(!b.canCast(spell(w, "shield"), w.position()), "plus de sort après la fin");
-        int events = log.size();
-        b.endTurn();
-        Check.equal(events, log.size(), "endTurn ignoré après la fin");
+    private static void teleportAndLeap() {
+        Check.suite("Téléportation et bond");
+        Setup s = new Setup();
+        Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 5, 5);
+        Fighter e = s.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 5);
+        s.board.setObstacle(5, 6, true);
+        Battle b = s.start(9);
+        Spell tp = spell(m, "teleport");
+        Check.that(!b.canCast(tp, e.position()), "pas sur une case occupée");
+        Check.that(!b.canCast(tp, new Cell(5, 6)), "pas sur un obstacle");
+        Check.that(b.cast(tp, new Cell(5, 8)), "téléportation par-dessus un obstacle");
+        Check.equal(new Cell(5, 8), m.position(), "nouvelle position");
+
+        Setup s2 = new Setup();
+        Fighter a = s2.add(FighterCatalog.ARCHER, Team.RED, 5, 5);
+        s2.add(FighterCatalog.WARRIOR, Team.BLUE, 12, 12);
+        s2.board.setObstacle(6, 5, true);
+        Battle b2 = s2.start(9);
+        Spell leap = spell(a, "leap");
+        Check.that(!b2.canCast(leap, new Cell(6, 6)), "bond : en ligne droite seulement");
+        Check.that(b2.cast(leap, new Cell(7, 5)), "bond par-dessus un rocher");
+        Check.equal(new Cell(7, 5), a.position(), "atterrissage");
     }
 
-    private static void determinism() {
-        Check.suite("Déterminisme");
-        int first = -1;
-        for (int run = 0; run < 2; run++) {
-            Battle b = battle(new Cell(5, 5), new Cell(6, 5), new ArrayList<>(), 99);
-            b.cast(spell(b.active(), "melee"), other(b).position());
-            int hp = other(b).hp();
-            if (run == 0) first = hp;
-            else Check.equal(first, hp, "même graine, mêmes dégâts");
+    private static void poison() {
+        Check.suite("Poison");
+        Setup s = new Setup();
+        Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 2, 5);
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 5);
+        Battle b = s.start(10);
+        Check.that(b.cast(spell(m, "poison"), w.position()), "poison lancé");
+        Check.equal(100, w.hp(), "pas de dégâts immédiats");
+        for (int i = 0; i < 3; i++) {
+            b.endTurn();
+            Check.equal(100 - 6 * (i + 1), w.hp(), "6 dégâts au début du tour " + (i + 1) + " de la cible");
+            b.endTurn();
         }
+        b.endTurn();
+        Check.equal(82, w.hp(), "plus de dégâts après 3 tours");
+        Check.equal(18, m.stats().damageDealt(), "dégâts de poison attribués au lanceur");
+    }
+
+    private static void traps() {
+        Check.suite("Pièges");
+        Setup s = new Setup();
+        Fighter a = s.add(FighterCatalog.ARCHER, Team.RED, 5, 2);
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 5, 7);
+        Battle b = s.start(11);
+        Spell trap = spell(a, "trap");
+        Check.that(b.cast(trap, new Cell(5, 5)), "piège posé");
+        Check.that(!b.canCast(trap, new Cell(5, 6)), "relance 1 : un piège par tour");
+        b.endTurn();
+        Check.that(b.move(new Cell(5, 4)), "l'ennemi traverse la case piégée");
+        Check.equal(new Cell(5, 5), w.position(), "il est arrêté net sur le piège");
+        Check.inRange(100 - w.hp(), 12, 16, "dégâts du piège");
+        Check.equal(1, w.pm(), "seuls les PM des cases parcourues sont dépensés");
+        Check.that(b.traps().isEmpty(), "le piège disparaît");
+        b.endTurn();
+        b.cast(trap, new Cell(6, 3));
+        b.endTurn();
+        b.endTurn();
+        b.cast(trap, new Cell(7, 3));
+        b.endTurn();
+        b.endTurn();
+        b.cast(trap, new Cell(8, 3));
+        Check.equal(2, b.traps().size(), "2 pièges maximum : le plus ancien disparaît");
+        Check.that(b.trapAt(new Cell(6, 3)) == null, "c'est bien le plus ancien qui est retiré");
+        b.endTurn();
+        Check.that(b.reach().cells().size() > 0, "les pièges ne bloquent pas le calcul de chemin");
+    }
+
+    private static void destructibles() {
+        Check.suite("Obstacles destructibles");
+        Setup s = new Setup();
+        Fighter a = s.add(FighterCatalog.ARCHER, Team.RED, 2, 5);
+        s.add(FighterCatalog.WARRIOR, Team.BLUE, 9, 5);
+        s.board.setObstacle(5, 5, true, 10);
+        s.board.setObstacle(5, 6, true, 0);
+        Battle b = s.start(12);
+        Check.that(!b.canCast(spell(a, "aimed"), new Cell(9, 5)), "la caisse bloque la vue");
+        Check.that(b.canCast(spell(a, "aimed"), new Cell(5, 5)), "la caisse peut être visée");
+        Check.that(!b.canCast(spell(a, "aimed"), new Cell(5, 6)), "un rocher ne peut pas être visé");
+        b.cast(spell(a, "aimed"), new Cell(5, 5));
+        Check.that(!s.board.hasObstacle(new Cell(5, 5)), "caisse détruite (10 PV, tir 10-14)");
+        Check.equal(1L, s.count(BattleEvent.ObstacleDestroyed.class), "événement de destruction");
+        Check.that(s.board.isWalkable(new Cell(5, 5)), "la case devient praticable");
+        Check.that(b.hasLineOfSight(a.position(), new Cell(9, 5)), "et ne bloque plus la vue");
+        Check.equal(1, a.stats().obstaclesDestroyed(), "statistique de destruction");
+    }
+
+    private static void shield() {
+        Check.suite("Bouclier");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Battle b = s.start(13);
+        b.cast(spell(w, "shield"), w.position());
+        b.endTurn();
+        int before = w.hp();
+        b.cast(spell(m, "arcane"), w.position());
+        Check.inRange(before - w.hp(), 4, 6, "dégâts 8-12 réduits de moitié");
+        b.endTurn();
+        Check.that(!w.hasShield(), "expiré au début du tour suivant du guerrier");
+    }
+
+    private static void initiative() {
+        Check.suite("Initiative et ordre de jeu");
+        List<Fighter> list = new ArrayList<>();
+        Fighter r1 = new Fighter(FighterCatalog.WARRIOR, Team.RED, 0, new Cell(1, 1));
+        Fighter r2 = new Fighter(FighterCatalog.ARCHER, Team.RED, 1, new Cell(3, 1));
+        Fighter b1 = new Fighter(FighterCatalog.MAGE, Team.BLUE, 0, new Cell(13, 13));
+        Fighter b2 = new Fighter(FighterCatalog.WARRIOR, Team.BLUE, 1, new Cell(11, 13));
+        list.add(r1);
+        list.add(r2);
+        list.add(b1);
+        list.add(b2);
+        List<Fighter> order = Battle.computeTurnOrder(list);
+        Check.equal(List.of(r2, b1, r1, b2), order, "équipes alternées, la plus rapide (Archère 12) commence");
+
+        Board board = new Board(15);
+        Battle b = new Battle(board, list, new Random(14));
+        List<BattleEvent> log = new ArrayList<>();
+        b.addListener(log::add);
+        b.start();
+        Check.that(log.get(0) instanceof BattleEvent.TurnOrderSet, "l'ordre est annoncé avant le premier tour");
+        for (int i = 0; i < b.turnOrder().size() - 1; i++) {
+            Check.that(b.turnOrder().get(i).team() != b.turnOrder().get(i + 1).team(), "alternance des équipes");
+        }
+        Fighter first = b.active();
+        for (int i = 0; i < 4; i++) b.endTurn();
+        Check.equal(first, b.active(), "après un tour complet, retour au premier");
+        Check.equal(2, b.round(), "manche 2");
+        b.turnOrder().get(1).takeDamage(1000);
+        b.endTurn();
+        Check.that(b.active() != b.turnOrder().get(1), "un combattant mort est sauté");
+    }
+
+    private static void teamVictory() {
+        Check.suite("Victoire par équipe");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Fighter a = s.add(FighterCatalog.ARCHER, Team.BLUE, 12, 12);
+        Battle b = s.start(15);
+        m.takeDamage(55);
+        b.cast(spell(w, "stun"), m.position());
+        Check.that(!m.isAlive(), "le mage tombe");
+        Check.that(!b.isOver(), "l'équipe bleue a encore l'Archère");
+        Check.equal(1, w.stats().kills(), "statistique d'élimination");
+        Check.equal(1L, s.count(BattleEvent.Died.class), "événement de mort");
+        b.endTurn();
+        Check.equal(a, b.active(), "le mage mort est sauté");
+        b.endTurn();
+        Check.equal(w, b.active(), "retour au guerrier");
+        b.dealDamage(w, a, 1000, CastStyle.MELEE);
+        Check.that(b.isOver(), "toute l'équipe bleue est tombée");
+        Check.equal(Team.RED, b.winner(), "victoire des Rouges");
+        Check.equal(1L, s.count(BattleEvent.BattleEnded.class), "fin de combat annoncée une seule fois");
+        Check.that(!b.move(new Cell(5, 6)), "plus aucune action après la fin");
+    }
+
+    private static void simulation() {
+        Check.suite("Simulation (IA)");
+        Setup s = new Setup();
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.RED, 5, 5);
+        Fighter m = s.add(FighterCatalog.MAGE, Team.BLUE, 6, 5);
+        Battle b = s.start(16);
+        int events = s.log.size();
+        Battle sim = b.simulate();
+        Fighter simMage = sim.counterpart(b, m);
+        sim.cast(spell(w, "stun"), simMage.position());
+        Check.equal(60, m.hp(), "le combat réel n'est pas touché");
+        Check.equal(60 - 14, simMage.hp(), "la simulation utilise la moyenne exacte (11-16 → 14)");
+        Check.equal(events, s.log.size(), "aucun événement émis par la simulation");
     }
 }

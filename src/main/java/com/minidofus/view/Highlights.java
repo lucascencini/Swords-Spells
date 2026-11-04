@@ -13,8 +13,11 @@ public final class Highlights {
     public enum Style {
         REACH(new Color(46, 204, 113), 0.30, 0.55),
         PATH(new Color(120, 255, 160), 0.55, 0.95),
-        RANGE(new Color(243, 156, 18), 0.18, 0.40),
-        RANGE_ENEMY(new Color(243, 156, 18), 0.32, 0.60),
+        RANGE(new Color(255, 160, 30), 0.30, 0.62),
+        /** À portée mais hors de la ligne de vue. */
+        RANGE_BLOCKED(new Color(90, 90, 100), 0.30, 0.45),
+        ALLY_TARGET(new Color(46, 204, 113), 0.30, 0.65),
+        RANGE_ENEMY(new Color(255, 120, 40), 0.45, 0.85),
         IMPACT(new Color(255, 107, 53), 0.50, 0.95),
         IMPACT_ENEMY(new Color(231, 76, 60), 0.65, 1.0),
         SELF_HEAL(new Color(46, 204, 113), 0.55, 0.95),
@@ -34,6 +37,7 @@ public final class Highlights {
     private final Map<Cell, Style> cells = new LinkedHashMap<>();
     private Cell hover;
     private String label;
+    private Color labelColor = Color.WHITE;
     private Cell labelCell;
 
     public void clear() {
@@ -59,8 +63,17 @@ public final class Highlights {
     }
 
     public void setLabel(Cell cell, String text) {
+        setLabel(cell, text, Color.WHITE);
+    }
+
+    public void setLabel(Cell cell, String text, Color color) {
         this.labelCell = cell;
         this.label = text;
+        this.labelColor = color;
+    }
+
+    public Color labelColor() {
+        return labelColor;
     }
 
     public String label() {

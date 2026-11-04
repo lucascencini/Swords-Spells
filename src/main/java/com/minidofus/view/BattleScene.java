@@ -5,6 +5,7 @@ import com.minidofus.model.Board;
 import com.minidofus.model.Cell;
 import com.minidofus.model.Fighter;
 import com.minidofus.model.Terrain;
+import com.minidofus.model.Trap;
 import com.minidofus.model.map.Arena;
 import com.minidofus.model.map.DecorKind;
 import com.minidofus.model.map.DecorPlacement;
@@ -42,14 +43,34 @@ public final class BattleScene {
     private final Map<Fighter, FighterView> views = new LinkedHashMap<>();
     private final EffectLayer effects = new EffectLayer();
     private final BackgroundPainter background = new BackgroundPainter();
-    private final List<StaticSprite> sprites = new ArrayList<>();
+    private final List<DecorSprite> sprites = new ArrayList<>();
+    private final List<Trap> traps = new ArrayList<>();
     private final List<Object> drawOrder = new ArrayList<>();
     private BufferedImage ground;
     private Rectangle2D groundBounds;
     private double waterClock;
 
-    /** Sprite de décor immobile, déjà positionné dans le monde. */
-    private record StaticSprite(BufferedImage image, double x, double y, double w, double h, double depth) { }
+    /** Sprite de décor positionné dans le monde ; {@code cell} est renseigné pour les obstacles (destructibles ou non). */
+    private static final class DecorSprite {
+        final BufferedImage image;
+        final double x;
+        final double y;
+        final double w;
+        final double h;
+        final double depth;
+        final Cell cell;
+        double shake;
+
+        DecorSprite(BufferedImage image, double x, double y, double w, double h, double depth, Cell cell) {
+            this.image = image;
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.depth = depth;
+            this.cell = cell;
+        }
+    }
 
     public BattleScene(Assets assets, PoseTable poses, Arena arena, List<FighterView> fighterViews) {
         this.assets = assets;
@@ -120,9 +141,10 @@ public final class BattleScene {
             double anchorY = d.kind().role() == DecorKind.Role.TREE ? 0.93 : 0.80;
             double wx = Iso.worldX(d.x(), d.y());
             double wy = Iso.worldY(d.x(), d.y());
-            sprites.add(new StaticSprite(img, wx - w / 2, wy - h * anchorY, w, h, d.x() + d.y()));
+            Cell cell = d.kind().isBlocking() ? new Cell((int) Math.round(d.x()), (int) Math.round(d.y())) : null;
+            sprites.add(new DecorSprite(img, wx - w / 2, wy - h * anchorY, w, h, d.x() + d.y(), cell));
         }
-        sprites.sort(Comparator.comparingDouble(StaticSprite::depth));
+        sprites.sort(Comparator.comparingDouble(o -> o.depth));
     }
 
     private void drawDecor(Graphics2D g, DecorPlacement d) {
@@ -138,7 +160,26 @@ public final class BattleScene {
 
     // ------------------------------------------------------------------ mise à jour et rendu
 
+    /** Fait trembler l'obstacle de la case (coup reçu). */
+    public void shakeObstacle(Cell cell) {
+        for (DecorSprite s : sprites) if (cell.equals(s.cell)) s.shake = 1;
+    }
+
+    /** Retire l'obstacle détruit de la case. */
+    public void removeObstacle(Cell cell) {
+        sprites.removeIf(s -> cell.equals(s.cell));
+    }
+
+    public void addTrap(Trap trap) {
+        traps.add(trap);
+    }
+
+    public void removeTrap(Trap trap) {
+        traps.remove(trap);
+    }
+
     public void update(double dt) {
+        for (DecorSprite s : sprites) s.shake = Math.max(0, s.shake - dt * 4);
         waterClock += dt;
         for (FighterView v : views.values()) v.update(dt);
         effects.update(dt);
@@ -153,17 +194,19 @@ public final class BattleScene {
         g.drawImage(ground, (int) Math.round(groundBounds.getX()), (int) Math.round(groundBounds.getY()), null);
         drawWaterShimmer(g);
         drawHighlights(g, highlights);
+        for (Trap t : traps) drawTrap(g, t);
         for (FighterView v : views.values()) v.drawGroundMarks(g, v.fighter() == active);
 
         // tri en profondeur : décor (déjà trié) fusionné avec les combattants
         drawOrder.clear();
         drawOrder.addAll(sprites);
         drawOrder.addAll(views.values());
-        drawOrder.sort(Comparator.comparingDouble(o -> o instanceof StaticSprite s ? s.depth() : ((FighterView) o).depth()));
+        drawOrder.sort(Comparator.comparingDouble(o -> o instanceof DecorSprite s ? s.depth : ((FighterView) o).depth()));
         for (Object o : drawOrder) {
-            if (o instanceof StaticSprite s) {
-                g.drawImage(s.image(), (int) Math.round(s.x()), (int) Math.round(s.y()),
-                        (int) Math.round(s.w()), (int) Math.round(s.h()), null);
+            if (o instanceof DecorSprite s) {
+                double dx = s.shake > 0 ? Math.sin(s.shake * 40) * 3 * s.shake : 0;
+                g.drawImage(s.image, (int) Math.round(s.x + dx), (int) Math.round(s.y),
+                        (int) Math.round(s.w), (int) Math.round(s.h), null);
             } else {
                 ((FighterView) o).draw(g, assets, poses);
             }
@@ -210,12 +253,40 @@ public final class BattleScene {
         g.setStroke(new BasicStroke(1f));
     }
 
+    /** Piège : cercle denté aux couleurs de l'équipe du poseur. */
+    private void drawTrap(Graphics2D g, Trap trap) {
+        double cx = Iso.worldX(trap.cell().x(), trap.cell().y());
+        double cy = Iso.worldY(trap.cell().x(), trap.cell().y());
+        Color team = UiTheme.teamColor(trap.owner().team());
+        double pulse = 0.5 + 0.5 * Math.sin(waterClock * 3);
+        g.setColor(new Color(30, 20, 10, 150));
+        g.fill(new java.awt.geom.Ellipse2D.Double(cx - 15, cy - 8, 30, 16));
+        g.setStroke(new BasicStroke(2f));
+        g.setColor(UiTheme.withAlpha(team, (int) (160 + 80 * pulse)));
+        g.draw(new java.awt.geom.Ellipse2D.Double(cx - 15, cy - 8, 30, 16));
+        Path2D teeth = new Path2D.Double();
+        for (int i = 0; i < 8; i++) {
+            double a = i * Math.PI / 4;
+            double ix = cx + Math.cos(a) * 9;
+            double iy = cy + Math.sin(a) * 4.8;
+            double ox = cx + Math.cos(a + Math.PI / 8) * 14;
+            double oy = cy + Math.sin(a + Math.PI / 8) * 7.5;
+            if (i == 0) teeth.moveTo(ix, iy); else teeth.lineTo(ix, iy);
+            teeth.lineTo(ox, oy);
+        }
+        teeth.closePath();
+        g.setColor(new Color(200, 205, 215, 210));
+        g.setStroke(new BasicStroke(1.2f));
+        g.draw(teeth);
+        g.setStroke(new BasicStroke(1f));
+    }
+
     private void drawPathLabel(Graphics2D g, Camera camera, Highlights h) {
         if (h.label() == null || h.labelCell() == null) return;
         Point2D.Double p = camera.toScreen(Iso.worldX(h.labelCell().x(), h.labelCell().y()),
                 Iso.worldY(h.labelCell().x(), h.labelCell().y()));
         UiTheme.drawOutlinedCentered(g, h.label(), UiTheme.BODY_BOLD.deriveFont(14f), p.x, p.y + 5,
-                Color.WHITE, new Color(0, 0, 0, 200));
+                h.labelColor(), new Color(0, 0, 0, 200));
     }
 
     /** Losange d'une case, rétréci de {@code inset} pixels. */

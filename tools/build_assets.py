@@ -77,7 +77,7 @@ ICONS = {
     "strike": "interface/ability_buttons/sword.png",
 }
 SOUNDS = [
-    "blade_02", "blade_03", "metal_02", "spell_01", "spell_fire_03", "spell_fire_06",
+    "blade_01", "blade_02", "blade_03", "metal_02", "spell_01", "spell_fire_03", "spell_fire_06",
     "creature_hurt_01", "item_gem_02", "item_coins_02", "misc_01", "wood_01",
 ]
 
@@ -128,6 +128,20 @@ def normalise_tile(img: Image.Image) -> Image.Image:
     return out if pad >= 0 else out.crop((0, -pad, out.width, out.height))
 
 
+def recolor_blue_to_green(img: Image.Image) -> Image.Image:
+    """Recolore les teintes bleues (robe, capuche, orbe) en vert forêt : l'Archère dérive des poses du Mage."""
+    rgba = np.array(img.convert("RGBA")).astype(np.float32) / 255.0
+    rgb, alpha = rgba[:, :, :3], rgba[:, :, 3:]
+    hsv = np.array(Image.fromarray((rgb * 255).astype(np.uint8)).convert("HSV")).astype(np.float32)
+    hue = hsv[:, :, 0] * 360 / 255
+    blue = (hue > 185) & (hue < 265) & (hsv[:, :, 1] > 40)
+    hsv[:, :, 0] = np.where(blue, 95 * 255 / 360, hsv[:, :, 0])
+    hsv[:, :, 1] = np.where(blue, hsv[:, :, 1] * 0.62, hsv[:, :, 1])
+    hsv[:, :, 2] = np.where(blue, hsv[:, :, 2] * 0.72, hsv[:, :, 2])
+    out = np.array(Image.fromarray(hsv.astype(np.uint8), "HSV").convert("RGB")).astype(np.float32) / 255.0
+    return Image.fromarray((np.concatenate([out, alpha], axis=2) * 255).astype(np.uint8), "RGBA")
+
+
 def save(img: Image.Image, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path, optimize=True)
@@ -152,6 +166,10 @@ def main():
         save(load(src / rel), dst / "fx" / f"{name}.png")
     for name, rel in PORTRAITS.items():
         save(trim(keep_main_components(load(src / rel), 0.5)), dst / "ui" / f"portrait_{name}.png")
+    # Archère : dérivée du Mage
+    for i in range(1, 8):
+        save(recolor_blue_to_green(load(src / f"characters/mage/mage_pose_0{i}.png")), dst / "characters" / f"archer_{i}.png")
+    save(recolor_blue_to_green(trim(keep_main_components(load(src / PORTRAITS["mage"]), 0.5))), dst / "ui" / "portrait_archer.png")
     for name, rel in ICONS.items():
         save(trim(keep_main_components(load(src / rel), 0.5)), dst / "ui" / f"icon_{name}.png")
 

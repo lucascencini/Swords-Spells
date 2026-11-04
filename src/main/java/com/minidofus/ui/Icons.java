@@ -7,6 +7,8 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
+import java.awt.geom.Arc2D;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
@@ -14,12 +16,13 @@ import java.util.Map;
 
 /**
  * Icônes des actions. Celles fournies par le pack (bottes, feu, bouclier, flèche) sont utilisées
- * telles quelles ; les autres sont dessinées dans le même style (cadre octogonal dégradé).
+ * telles quelles ; les autres sont dessinées dans le même style (cadre octogonal dégradé + glyphe blanc).
  */
 public final class Icons {
 
     private static final int W = 52;
     private static final int H = 58;
+    private static final Color GLYPH = new Color(0xFFF6E4);
 
     private final Assets assets;
     private final Map<CastStyle, BufferedImage> spellIcons = new EnumMap<>(CastStyle.class);
@@ -40,10 +43,25 @@ public final class Icons {
         return switch (style) {
             case FIREBALL -> assets.image("ui/icon_fire");
             case SHIELD -> assets.image("ui/icon_shield");
-            case ARCANE_BOLT -> assets.image("ui/icon_strike");
+            case ARROW -> assets.image("ui/icon_strike");
             case MELEE -> framed(new Color(0x9AA3AD), new Color(0x4A525C), Icons::sword);
+            case STUN_STRIKE -> framed(new Color(0x9C8FD0), new Color(0x463A7A), (g, x, y) -> {
+                sword(g, x, y);
+                star(g, x - 12, y - 14, 4);
+                star(g, x + 13, y - 9, 3);
+            });
+            case PUSH_STRIKE -> framed(new Color(0xC98A4E), new Color(0x6E3E14), Icons::pushGlyph);
             case DASH -> framed(new Color(0xE8963A), new Color(0x8A4A14), Icons::chevrons);
+            case GRAPPLE -> framed(new Color(0x7FA3BF), new Color(0x2E4A60), Icons::hook);
+            case ARCANE_BOLT -> framed(new Color(0x6A8CF0), new Color(0x22307A), (g, x, y) -> star(g, x, y, 13));
             case HEAL -> framed(new Color(0x48C774), new Color(0x1E6B3A), Icons::plus);
+            case TELEPORT -> framed(new Color(0xB07CE8), new Color(0x4A1E7A), Icons::spiral);
+            case POISON -> framed(new Color(0x86C84A), new Color(0x2E5A14), Icons::drop);
+            case RECOIL_ARROW -> framed(new Color(0x4FB8A8), new Color(0x1A5A50), Icons::recoil);
+            case TRAP -> framed(new Color(0xA88A62), new Color(0x4E3A22), Icons::trap);
+            case ARROW_RAIN -> framed(new Color(0xE0B94A), new Color(0x7A5A10), Icons::rain);
+            case LEAP -> framed(new Color(0x9CC8A0), new Color(0x2E5A36), Icons::leap);
+            case COLLISION, TRAP_TRIGGER, POISON_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
         };
     }
 
@@ -83,6 +101,18 @@ public final class Icons {
         return p;
     }
 
+    /** Trait épais clair avec ombre portée, pour les glyphes au trait. */
+    private static void strokeWithShadow(Graphics2D g, java.awt.Shape shape, float width) {
+        g.setStroke(new BasicStroke(width, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(new Color(0, 0, 0, 90));
+        g.translate(1, 2);
+        g.draw(shape);
+        g.translate(-1, -2);
+        g.setColor(GLYPH);
+        g.draw(shape);
+        g.setStroke(new BasicStroke(1f));
+    }
+
     private static void sword(Graphics2D g, double cx, double cy) {
         g.rotate(Math.toRadians(-45), cx, cy);
         Path2D blade = new Path2D.Double();
@@ -104,20 +134,59 @@ public final class Icons {
         g.rotate(Math.toRadians(45), cx, cy);
     }
 
+    private static void star(Graphics2D g, double cx, double cy, double r) {
+        Path2D p = new Path2D.Double();
+        for (int i = 0; i < 10; i++) {
+            double a = -Math.PI / 2 + i * Math.PI / 5;
+            double rr = i % 2 == 0 ? r : r * 0.42;
+            double x = cx + Math.cos(a) * rr;
+            double y = cy + Math.sin(a) * rr;
+            if (i == 0) p.moveTo(x, y); else p.lineTo(x, y);
+        }
+        p.closePath();
+        g.setColor(new Color(0, 0, 0, 80));
+        g.translate(1, 1.5);
+        g.fill(p);
+        g.translate(-1, -1.5);
+        g.setColor(new Color(0xFFE88A));
+        g.fill(p);
+    }
+
     private static void chevrons(Graphics2D g, double cx, double cy) {
-        g.setStroke(new BasicStroke(5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         for (int i = 0; i < 2; i++) {
             double ox = cx - 9 + i * 12;
             Path2D p = new Path2D.Double();
             p.moveTo(ox - 5, cy - 11);
             p.lineTo(ox + 5, cy);
             p.lineTo(ox - 5, cy + 11);
-            g.setColor(new Color(60, 25, 0, 120));
-            g.translate(1, 2);
-            g.draw(p);
-            g.translate(-1, -2);
-            g.setColor(new Color(0xFFF4DC));
-            g.draw(p);
+            strokeWithShadow(g, p, 5f);
+        }
+    }
+
+    private static void pushGlyph(Graphics2D g, double cx, double cy) {
+        Path2D arrow = new Path2D.Double();
+        arrow.moveTo(cx - 14, cy);
+        arrow.lineTo(cx + 6, cy);
+        arrow.moveTo(cx - 2, cy - 8);
+        arrow.lineTo(cx + 6, cy);
+        arrow.lineTo(cx - 2, cy + 8);
+        strokeWithShadow(g, arrow, 4.5f);
+        Path2D wall = new Path2D.Double();
+        wall.moveTo(cx + 14, cy - 13);
+        wall.lineTo(cx + 14, cy + 13);
+        strokeWithShadow(g, wall, 4f);
+    }
+
+    private static void hook(Graphics2D g, double cx, double cy) {
+        Path2D p = new Path2D.Double();
+        p.moveTo(cx + 2, cy - 16);
+        p.lineTo(cx + 2, cy + 4);
+        p.append(new Arc2D.Double(cx - 12, cy - 4, 14, 16, 0, -180, Arc2D.OPEN), true);
+        p.lineTo(cx - 9, cy - 1);
+        strokeWithShadow(g, p, 4f);
+        for (int i = 0; i < 3; i++) {
+            g.setColor(GLYPH);
+            g.draw(new Ellipse2D.Double(cx + 8, cy - 18 + i * 7, 5, 6));
         }
     }
 
@@ -128,5 +197,91 @@ public final class Icons {
         g.setColor(Color.WHITE);
         g.fillRoundRect((int) cx - 6, (int) cy - 15, 12, 30, 5, 5);
         g.fillRoundRect((int) cx - 15, (int) cy - 6, 30, 12, 5, 5);
+    }
+
+    private static void spiral(Graphics2D g, double cx, double cy) {
+        Path2D p = new Path2D.Double();
+        for (int i = 0; i <= 60; i++) {
+            double a = i * 0.32;
+            double r = 2 + i * 0.26;
+            double x = cx + Math.cos(a) * r;
+            double y = cy + Math.sin(a) * r;
+            if (i == 0) p.moveTo(x, y); else p.lineTo(x, y);
+        }
+        strokeWithShadow(g, p, 3.2f);
+    }
+
+    private static void drop(Graphics2D g, double cx, double cy) {
+        Path2D d = new Path2D.Double();
+        d.moveTo(cx, cy - 16);
+        d.curveTo(cx + 13, cy, cx + 11, cy + 13, cx, cy + 13);
+        d.curveTo(cx - 11, cy + 13, cx - 13, cy, cx, cy - 16);
+        g.setColor(new Color(0, 0, 0, 90));
+        g.translate(1, 2);
+        g.fill(d);
+        g.translate(-1, -2);
+        g.setColor(GLYPH);
+        g.fill(d);
+        g.setColor(new Color(0x2E5A14));
+        g.fill(new Ellipse2D.Double(cx - 6, cy + 1, 4, 4));
+        g.fill(new Ellipse2D.Double(cx + 2, cy + 4, 3, 3));
+    }
+
+    private static void recoil(Graphics2D g, double cx, double cy) {
+        Path2D shaft = new Path2D.Double();
+        shaft.moveTo(cx - 14, cy + 6);
+        shaft.lineTo(cx + 10, cy - 6);
+        shaft.moveTo(cx + 3, cy - 8);
+        shaft.lineTo(cx + 10, cy - 6);
+        shaft.lineTo(cx + 6, cy + 1);
+        strokeWithShadow(g, shaft, 3.6f);
+        Path2D back = new Path2D.Double();
+        back.moveTo(cx + 2, cy + 8);
+        back.lineTo(cx + 9, cy + 14);
+        back.lineTo(cx + 16, cy + 8);
+        strokeWithShadow(g, back, 3f);
+    }
+
+    private static void trap(Graphics2D g, double cx, double cy) {
+        Path2D teeth = new Path2D.Double();
+        for (int i = 0; i < 10; i++) {
+            double a = i * Math.PI / 5;
+            double ix = cx + Math.cos(a) * 9;
+            double iy = cy + Math.sin(a) * 9;
+            double ox = cx + Math.cos(a + Math.PI / 10) * 16;
+            double oy = cy + Math.sin(a + Math.PI / 10) * 16;
+            if (i == 0) teeth.moveTo(ix, iy); else teeth.lineTo(ix, iy);
+            teeth.lineTo(ox, oy);
+        }
+        teeth.closePath();
+        strokeWithShadow(g, teeth, 2.4f);
+        g.setColor(GLYPH);
+        g.fill(new Ellipse2D.Double(cx - 3, cy - 3, 6, 6));
+    }
+
+    private static void rain(Graphics2D g, double cx, double cy) {
+        for (int i = -1; i <= 1; i++) {
+            double x = cx + i * 10;
+            double y = cy + (i == 0 ? -4 : 2);
+            Path2D a = new Path2D.Double();
+            a.moveTo(x - 4, y - 12);
+            a.lineTo(x + 3, y + 9);
+            a.moveTo(x - 2, y + 6);
+            a.lineTo(x + 3, y + 9);
+            a.lineTo(x + 5, y + 4);
+            strokeWithShadow(g, a, 3f);
+        }
+    }
+
+    private static void leap(Graphics2D g, double cx, double cy) {
+        Path2D arc = new Path2D.Double();
+        arc.moveTo(cx - 15, cy + 10);
+        arc.quadTo(cx, cy - 26, cx + 13, cy + 6);
+        arc.moveTo(cx + 6, cy + 2);
+        arc.lineTo(cx + 13, cy + 7);
+        arc.lineTo(cx + 15, cy - 1);
+        strokeWithShadow(g, arc, 3.8f);
+        g.setColor(GLYPH);
+        g.fillRoundRect((int) cx - 18, (int) cy + 12, 36, 3, 2, 2);
     }
 }

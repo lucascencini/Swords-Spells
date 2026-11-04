@@ -9,15 +9,17 @@ import com.minidofus.model.TargetMode;
 
 import java.util.List;
 
-/** Soigne le lanceur (sans dépasser ses PV max). */
+/** Soigne le lanceur ou un allié à portée (sans dépasser ses PV max). */
 public final class HealSpell extends AbstractSpell {
 
     private final IntRange amount;
 
-    public HealSpell(String id, String name, int cost, IntRange amount) {
-        super(id, name, cost, 0, 0, TargetMode.SELF, CastStyle.HEAL);
+    public HealSpell(Base base, IntRange amount) {
+        super(base, TargetMode.ALLY, CastStyle.HEAL);
         this.amount = amount;
     }
+
+    public IntRange amount() { return amount; }
 
     @Override
     public String effectSummary() {
@@ -26,16 +28,18 @@ public final class HealSpell extends AbstractSpell {
 
     @Override
     public boolean canTarget(SpellContext ctx, Fighter caster, Cell target) {
-        return target.equals(caster.position());
+        Fighter f = ctx.fighterAt(target);
+        boolean self = target.equals(caster.position());
+        return f != null && !f.isEnemyOf(caster) && (self || reachable(ctx, caster, target));
     }
 
     @Override
     public List<Cell> impactCells(SpellContext ctx, Fighter caster, Cell target) {
-        return single(caster.position());
+        return single(target);
     }
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
-        ctx.heal(caster, amount.roll(ctx.rng()));
+        ctx.heal(caster, ctx.fighterAt(target), ctx.roll(amount));
     }
 }
