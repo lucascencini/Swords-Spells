@@ -22,10 +22,12 @@ public final class TitleScreen implements Screen {
     private int mouseY = -1;
     private double clock;
 
-    public TitleScreen(Consumer<Graphics2D> background, Runnable versusComputer, Runnable twoPlayers, Runnable quit) {
+    public TitleScreen(Consumer<Graphics2D> background, Runnable versusComputer, Runnable twoPlayers, Runnable online,
+                       Runnable quit) {
         this.background = background;
         this.buttons = List.of(
                 new MenuButton("Contre l'ordinateur", "Facile, normal ou difficile", true, versusComputer),
+                new MenuButton("Jouer en ligne", "Avec vos amis, sur un serveur", false, online),
                 new MenuButton("Deux joueurs", "Sur le même PC, chacun son tour", false, twoPlayers),
                 new MenuButton("Quitter", null, false, quit));
     }
@@ -35,11 +37,11 @@ public final class TitleScreen implements Screen {
         width = w;
         height = h;
         int bw = 340;
-        int y = (int) (h * 0.46);
+        int y = (int) (h * 0.42);
         for (int i = 0; i < buttons.size(); i++) {
-            int bh = i == 2 ? 46 : 64;
+            int bh = i == buttons.size() - 1 ? 46 : 62;
             buttons.get(i).setBounds((w - bw) / 2, y, bw, bh);
-            y += bh + 14;
+            y += bh + 12;
         }
     }
 
@@ -56,7 +58,7 @@ public final class TitleScreen implements Screen {
         g.fillRect(0, 0, width, height);
 
         double drift = Math.sin(clock * 1.2) * 4;
-        int titleY = (int) (height * 0.27 + drift);
+        int titleY = (int) (height * 0.23 + drift);
         UiTheme.drawOutlinedCentered(g, "Swords & Spells", UiTheme.TITLE.deriveFont(64f), width / 2.0, titleY,
                 UiTheme.GOLD_LIGHT, new Color(40, 25, 5, 230));
         UiTheme.drawOutlinedCentered(g, "Combat tactique au tour par tour", UiTheme.BODY_BOLD.deriveFont(18f),

@@ -240,6 +240,59 @@ public final class Battle implements SpellContext {
         revision++;
     }
 
+    /**
+     * Applique une commande du combattant actif. Toutes les vérifications sont faites ici : une commande
+     * invalide (case hors de portée, sort indisponible, rang de sort inconnu…) est refusée sans effet.
+     */
+    public boolean apply(Command command) {
+        if (isOver() || command == null) return false;
+        if (command instanceof Command.Move m) return move(new Cell(m.x(), m.y()));
+        if (command instanceof Command.Cast c) {
+            List<Spell> spells = active().fighterClass().spells();
+            if (c.spell() < 0 || c.spell() >= spells.size()) return false;
+            return cast(spells.get(c.spell()), new Cell(c.x(), c.y()));
+        }
+        endTurn();
+        return true;
+    }
+
+    /** Commande équivalente à un déplacement ou un sort, pour l'envoyer par le réseau. */
+    public Command toCommand(Spell spell, Cell target) {
+        return new Command.Cast(active().fighterClass().spells().indexOf(spell), target.x(), target.y());
+    }
+
+    /**
+     * Empreinte de l'état (positions, PV, PA, PM, statuts, relances, obstacles, pièges, tour). Deux combats
+     * synchronisés ont la même ; une différence signale une désynchronisation.
+     */
+    public long stateHash() {
+        long h = 1125899906842597L;
+        h = 31 * h + turnsPlayed;
+        h = 31 * h + activeIndex;
+        h = 31 * h + (winner == null ? -1 : winner.ordinal());
+        for (Fighter f : fighters) {
+            h = 31 * h + f.position().x();
+            h = 31 * h + f.position().y();
+            h = 31 * h + f.hp();
+            h = 31 * h + f.pa();
+            h = 31 * h + f.pm();
+            for (Status s : f.statuses()) {
+                h = 31 * h + s.kind().ordinal();
+                h = 31 * h + s.turnsLeft();
+            }
+            for (Spell s : f.fighterClass().spells()) h = 31 * h + f.cooldown(s);
+        }
+        for (int i = 0; i < board.size() * board.size(); i++) {
+            Cell c = board.cellAt(i);
+            h = 31 * h + (board.hasObstacle(c) ? 1 + board.obstacleHp(c) : 0);
+        }
+        for (Trap t : traps) {
+            h = 31 * h + t.cell().x() * 97 + t.cell().y();
+            h = 31 * h + fighters.indexOf(t.owner());
+        }
+        return h;
+    }
+
     // ------------------------------------------------------------------ SpellContext
 
     @Override

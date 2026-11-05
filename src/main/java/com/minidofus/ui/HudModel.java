@@ -49,4 +49,24 @@ public interface HudModel {
 
     /** Phrase d'aide contextuelle sous la barre d'actions. */
     String hint();
+
+    /** Partie en ligne ? */
+    default boolean online() {
+        return false;
+    }
+
+    /** Secondes restantes au combattant actif (chrono en ligne), ou -1. */
+    default int secondsLeft() {
+        return -1;
+    }
+
+    /** Joueur qui contrôle le combattant (en ligne), ou {@code null}. */
+    default String controllerLabel(Fighter f) {
+        return null;
+    }
+
+    /** Message affiché sur la barre d'actions quand ce n'est pas au joueur d'agir. */
+    default String waitingLabel() {
+        return "L'ordinateur joue…";
+    }
 }

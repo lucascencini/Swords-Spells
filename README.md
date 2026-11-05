@@ -28,8 +28,8 @@ Pour compiler : un **JDK 17 ou plus récent** (par exemple [Temurin 21](https://
 | … puis jouer | `build.bat run` | `./build.sh run` |
 | Application autonome (Java embarqué, ~85 Mo) | `build.bat package` → `build\dist\SwordsAndSpells\SwordsAndSpells.exe` | `./build.sh package` |
 
-Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur » ou « Deux joueurs », puis
-composez les équipes et la carte. Pour tester plus vite, des options lancent directement un combat :
+Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur », « Jouer en ligne » ou
+« Deux joueurs », puis composez les équipes et la carte. Pour tester plus vite, des options lancent directement un combat :
 
 | Option | Effet |
 |---|---|
@@ -41,6 +41,19 @@ Exemple : `java -jar build/mini-dofus.jar --red warrior,archer --blue mage,warri
 
 Pour travailler dans un IDE (IntelliJ IDEA, Eclipse, VS Code), ouvrez simplement le dossier :
 le `pom.xml` décrit le projet (structure Maven standard). Classe principale : `com.minidofus.Main`.
+
+## Jouer en ligne
+
+Jusqu'à 6 joueurs (3 contre 3) dans un salon : chacun prend une place et une classe, les places libres sont
+jouées par l'ordinateur. Chrono par tour (30, 60 ou 90 s), chat (`Entrée` en combat) et reconnexion
+automatique en cas de coupure.
+
+- **Serveur permanent (VPS)** : `java -jar mini-dofus.jar --server [--port 7777] [--password secret]`, ou
+  le script `deploy/install-server.sh`, qui l'installe comme service. Guide pas à pas pour un VPS IONOS :
+  [docs/SERVEUR.md](docs/SERVEUR.md).
+- **Sans serveur** : « Jouer en ligne » → « Héberger sur ce PC » (réseau local, ou port 7777 ouvert sur la box).
+
+Tous les joueurs doivent avoir la même version du jeu.
 
 ## Commandes
 
@@ -121,6 +134,7 @@ src/main/java/com/minidofus/
 ├── view/                     rendu : projection iso, caméra, scène, personnages
 │   ├── anim/                 petites animations composables (séquence, parallèle, interpolation)
 │   └── fx/                   effets : projectiles, explosions, entailles, chiffres flottants
+├── net/                      jeu en ligne : protocole texte, serveur (salon, chrono, IA, reconnexion), client
 ├── ui/                       HUD dessiné en Java2D : fiches, frise, barre d'actions, info-bulles, fin de partie
 │   └── menu/                 écran titre (avec partie de démonstration en fond), configuration, boutons
 └── game/                     assemblage : session de jeu, contrôleur de tour, présentateur, fenêtre (menus, combat, pause)
@@ -135,6 +149,11 @@ clic ─▶ TurnController ─▶ Battle (règles) ─▶ BattleEvent ─▶ Bat
 
 Conséquences : les règles se testent sans écran, une animation ne peut pas désynchroniser l'état du
 jeu, et ajouter une IA ou du réseau ne demande de toucher qu'au modèle.
+
+**En ligne**, le serveur fait autorité : les joueurs envoient des intentions (`Command` : déplacer,
+lancer, finir le tour), le serveur les valide et les diffuse numérotées. Chaque joueur les rejoue sur sa
+propre copie du combat, créée avec la même graine, puis compare une empreinte de l'état. En cas d'écart,
+le combat est rechargé automatiquement.
 
 ## Ce qui a changé par rapport au prototype HTML
 
@@ -197,15 +216,19 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
 
 ## Tests
 
-`build.sh` / `build.bat` lancent `AllTests` : 141 vérifications sur les règles (ligne de vue, initiative,
+`build.sh` / `build.bat` lancent `AllTests` : 189 vérifications sur les règles (ligne de vue, initiative,
 statuts, relances, poussées et chocs, pièges, caisses, victoire par équipe), sur la génération de 900 cartes,
-et sur l'ordinateur (parties complètes de 1c1 à 3c3, et le niveau Difficile doit battre le Facile).
+sur l'ordinateur (parties complètes de 1c1 à 3c3, et le niveau Difficile doit battre le Facile), et sur
+le jeu en ligne (déterminisme des commandes, protocole, mot de passe, salon, combat complet entre clients,
+chrono, déconnexion, reconnexion, tentative de jouer à la place d'un autre).
 
-Deux outils de vérification visuelle, dans `src/test/java` :
+Des outils de vérification visuelle, dans `src/test/java` :
 
 - `game.Snapshots` joue une partie ordinateur contre ordinateur hors écran et enregistre une capture à
   la première apparition de chaque sort, avec le temps de rendu moyen.
 - `WindowSmokeTest` ouvre la vraie fenêtre et la pilote avec de vrais clics et touches.
+- `OnlineSmokeTest` joue une partie en ligne dans la vraie fenêtre contre un joueur automatique : connexion,
+  salon, chat, combat.
 - `MenuSmokeTest` parcourt les menus dans la vraie fenêtre : titre, configuration, combat, pause, retour.
 
 ## Pistes

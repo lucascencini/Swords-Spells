@@ -20,6 +20,8 @@ public final class Camera {
     /** Cadre l'arène dans la zone utile de l'écran (en tenant compte des marges du HUD). */
     public void fit(Rectangle2D worldBounds, int viewWidth, int viewHeight, int marginTop, int marginBottom) {
         this.world = worldBounds;
+        this.targetX = Double.NaN; // un recadrage annule tout glissement en cours
+        this.targetY = Double.NaN;
         this.viewW = viewWidth;
         this.viewH = viewHeight;
         double usableH = Math.max(100, viewHeight - marginTop - marginBottom);

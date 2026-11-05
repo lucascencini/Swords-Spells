@@ -15,6 +15,15 @@ public interface Screen {
 
     void mousePressed(int x, int y);
 
-    /** Touche validée : « ENTER », « ESCAPE », « LEFT », « RIGHT »… */
+    /** Touche validée : « ENTER », « ESCAPE », « LEFT », « RIGHT », « TAB », « BACK_SPACE »… */
     void key(String key);
+
+    /** L'écran attend-il du texte (un champ de saisie a le focus) ? Les raccourcis clavier sont alors coupés. */
+    default boolean wantsText() {
+        return false;
+    }
+
+    /** Caractère tapé ou texte collé, quand {@link #wantsText()} est vrai. */
+    default void text(String typed) {
+    }
 }

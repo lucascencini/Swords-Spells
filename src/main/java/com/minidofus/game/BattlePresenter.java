@@ -31,6 +31,7 @@ import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static com.minidofus.view.anim.Animations.call;
 import static com.minidofus.view.anim.Animations.defer;
@@ -57,13 +58,13 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     private final Hud hud;
     private final String mapName;
     private final Consumer<Point2D.Double> focus;
-    private final MatchSetup setup;
+    private final Function<Fighter, String> subtitleOf;
     private boolean introShown;
 
     BattlePresenter(BattleScene scene, AnimationQueue queue, SoundPlayer sound, Assets assets, Hud hud,
-                    MatchSetup setup, Consumer<Point2D.Double> focus) {
-        this.setup = setup;
-        this.mapName = setup.theme().displayName();
+                    String mapName, Function<Fighter, String> subtitleOf, Consumer<Point2D.Double> focus) {
+        this.subtitleOf = subtitleOf;
+        this.mapName = mapName;
         this.focus = focus;
         this.scene = scene;
         this.queue = queue;
@@ -102,13 +103,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             Point2D.Double p = view(f).worldFeet();
             focus.accept(new Point2D.Double(p.x, p.y - 30));
             scene.effects().add(new RingPulse(p.x, p.y, UiTheme.teamColor(f.team()), 0.7));
-            boolean computer = setup.ai(f.team()) != null;
-            String subtitle;
-            if (setup.soloHumanTeam() != null) {
-                subtitle = computer ? "L'ordinateur réfléchit…" : "À vous de jouer !";
-            } else {
-                subtitle = computer ? "Équipe " + f.team().displayName() + " · ordinateur" : "Équipe " + f.team().displayName();
-            }
+            String subtitle = subtitleOf.apply(f);
             if (!introShown) {
                 introShown = true;
                 hud.showIntro(mapName, f.name() + " (" + f.team().displayName() + ") ouvre le combat");
@@ -286,7 +281,8 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             v.flashHeal();
             v.setShownHp(e.hpAfter());
             Point2D.Double head = v.worldHead();
-            scene.effects().add(new FloatingText("+" + e.amount(), head.x, head.y, UiTheme.HEAL, 24));
+            scene.effects().add(new FloatingText(e.amount() > 0 ? "+" + e.amount() : "PV au maximum", head.x, head.y,
+                    UiTheme.HEAL, e.amount() > 0 ? 24 : 15));
         }), delay(0.3));
     }
 

@@ -15,7 +15,9 @@ import com.minidofus.ui.UiTheme;
 import com.minidofus.ui.menu.MenuButton;
 import com.minidofus.ui.menu.Screen;
 import com.minidofus.ui.menu.SetupScreen;
+import com.minidofus.ui.menu.TextField;
 import com.minidofus.ui.menu.TitleScreen;
+import com.minidofus.net.Protocol;
 import com.minidofus.view.BattleScene;
 import com.minidofus.view.Camera;
 import com.minidofus.view.PoseTable;
@@ -28,7 +30,11 @@ import javax.swing.Timer;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
@@ -70,10 +76,14 @@ public final class GameView extends JComponent {
     private final TitleScreen title;
     private final SetupScreen setupScreen;
     private Screen menu;
+    private OnlineController online;
+    private final TextField battleChat = new TextField("Message… (Entrée pour envoyer, Échap pour fermer)", Protocol.MAX_CHAT, false);
+    private boolean chatOpen;
     private GameSession demo;
     private double demoEndTimer;
     private boolean paused;
     private final List<MenuButton> pauseButtons;
+    private final List<MenuButton> onlinePauseButtons;
     private int mouseX = -1;
     private int mouseY = -1;
 
@@ -91,19 +101,26 @@ public final class GameView extends JComponent {
         setDoubleBuffered(true);
         silent.toggleMute();
         sound.preload(Sfx.allFiles());
-        title = new TitleScreen(this::drawDemo, () -> openSetup(true), () -> openSetup(false), quit);
+        title = new TitleScreen(this::drawDemo, () -> openSetup(true), () -> openSetup(false), this::openOnline, quit);
         setupScreen = new SetupScreen(assets, this::mapPreview, this::startFromSetup, this::openTitle);
         setupScreen.setBackground(this::drawDemo);
         pauseButtons = List.of(
                 new MenuButton("Reprendre", null, true, () -> paused = false),
                 new MenuButton("Recommencer", "Même carte, mêmes équipes", false, () -> newSession(session.setup())),
                 new MenuButton("Menu principal", null, false, this::openTitle));
+        onlinePauseButtons = List.of(
+                new MenuButton("Reprendre", "La partie continue pendant la pause", true, () -> paused = false),
+                new MenuButton("Quitter la partie", "L'ordinateur jouera vos personnages", false, () -> {
+                    paused = false;
+                    if (online != null) online.exit();
+                }));
         if (setup != null) newSession(setup);
         else openTitle();
         timer = new Timer(1000 / 60, e -> tick());
         timer.setCoalesce(true);
         installMouse();
         installKeys();
+        installTyping();
         addComponentListener(new ComponentAdapter() {
             private boolean fitted;
 
@@ -158,12 +175,21 @@ public final class GameView extends JComponent {
         if (demo != null) demoHud.layout(w, h, demo.spellCount());
         title.layout(w, h);
         setupScreen.layout(w, h);
+        if (online != null) online.layout(w, h);
         int bw = 300;
         int y = h / 2 - 70;
         for (MenuButton b : pauseButtons) {
             b.setBounds((w - bw) / 2, y, bw, 54);
             y += 66;
         }
+        y = h / 2 - 70;
+        for (MenuButton b : onlinePauseButtons) {
+            b.setBounds((w - bw) / 2, y, bw, 58);
+            y += 70;
+        }
+        // à gauche de la barre d'actions (6 boutons de 70 px + fin de tour), sans la chevaucher
+        int actionBarLeft = (w - (70 * 6 + 8 * 5 + 18 + 112)) / 2 - 12;
+        battleChat.setBounds(16, h - 58, Math.max(200, Math.min(380, actionBarLeft - 28)), 40);
     }
 
     private void fitCameras() {
@@ -177,8 +203,34 @@ public final class GameView extends JComponent {
     private void openTitle() {
         paused = false;
         session = null;
+        online = null;
+        chatOpen = false;
         menu = title;
         startDemo();
+    }
+
+    private void openOnline() {
+        online = new OnlineController(assets, poses, sound, hud, this::drawDemo,
+                p -> camera.focus(p.x, p.y, HUD_TOP, HUD_BOTTOM), this::openTitle);
+        layoutAll();
+        menu = online.screen();
+    }
+
+    /** Suit l'état du mode en ligne : écran de menu, ou combat (nouveau combat → caméra recadrée). */
+    private void followOnline() {
+        online.update();
+        if (online == null) return; // sortie du mode en ligne pendant le traitement
+        menu = online.screen();
+        GameSession s = online.session();
+        if (s != null && s != session) {
+            session = s;
+            demo = null;
+            chatOpen = false;
+            layoutAll();
+            fitCameras();
+        } else if (s == null && session != null && menu != null) {
+            session = null;
+        }
     }
 
     private void openSetup(boolean versusComputer) {
@@ -250,6 +302,8 @@ public final class GameView extends JComponent {
 
     /** Fait avancer le jeu de {@code dt} secondes (utilisé par la boucle et par les tests). */
     public void advance(double dt) {
+        if (online != null) followOnline();
+        battleChat.update(dt);
         if (menu != null) {
             menu.update(dt);
             if (demo != null) {
@@ -260,7 +314,7 @@ public final class GameView extends JComponent {
             }
             return;
         }
-        if (paused || session == null) return;
+        if ((paused && online == null) || session == null) return; // en ligne, la pause ne fige pas la partie
         camera.update(dt);
         session.update(dt);
         hud.update(dt, session);
@@ -290,25 +344,53 @@ public final class GameView extends JComponent {
             UiTheme.enableQuality(g);
             if (menu != null) {
                 menu.draw(g);
+                drawConnectionBanner(g);
                 return;
             }
             session.scene().draw(g, camera, getWidth(), getHeight(), session.highlights(),
                     session.isOver() ? null : session.active());
             hud.draw(g, session);
+            if (online != null) drawBattleChat(g);
             if (paused) drawPause(g);
+            drawConnectionBanner(g);
         } finally {
             g.dispose();
         }
+    }
+
+    private List<MenuButton> currentPauseButtons() {
+        return online != null ? onlinePauseButtons : pauseButtons;
     }
 
     private void drawPause(Graphics2D g) {
         g.setColor(new Color(5, 4, 2, 170));
         g.fillRect(0, 0, getWidth(), getHeight());
         int w = 360;
-        int h = 290;
+        int h = online != null ? 240 : 290;
         UiTheme.panel(g, (getWidth() - w) / 2.0, getHeight() / 2.0 - 140, w, h, 20, true);
         UiTheme.drawCentered(g, "Pause", UiTheme.TITLE.deriveFont(26f), getWidth() / 2.0, getHeight() / 2.0 - 98, UiTheme.GOLD_LIGHT);
-        for (MenuButton b : pauseButtons) b.draw(g, mouseX, mouseY);
+        for (MenuButton b : currentPauseButtons()) b.draw(g, mouseX, mouseY);
+    }
+
+    /** Chat en surimpression pendant un combat en ligne (Entrée pour écrire). */
+    private void drawBattleChat(Graphics2D g) {
+        int w = battleChat.bounds().width;
+        int bottom = chatOpen ? battleChat.bounds().y - 10 : getHeight() - 22;
+        online.chat().drawFading(g, 18, bottom, w, chatOpen ? 12 : 7, chatOpen);
+        if (chatOpen) {
+            battleChat.draw(g, mouseX, mouseY);
+        } else {
+            UiTheme.drawOutlinedLeft(g, "Entrée : discuter", UiTheme.BODY.deriveFont(11f), 18, getHeight() - 6,
+                    new Color(255, 255, 255, 150), new Color(0, 0, 0, 120));
+        }
+    }
+
+    private void drawConnectionBanner(Graphics2D g) {
+        String text = online == null ? null : online.banner();
+        if (text == null) return;
+        int w = 460;
+        UiTheme.panel(g, (getWidth() - w) / 2.0, 130, w, 44, 12, true);
+        UiTheme.drawCentered(g, text, UiTheme.BODY_BOLD.deriveFont(14f), getWidth() / 2.0, 158, UiTheme.DAMAGE_HEAVY);
     }
 
     // ------------------------------------------------------------------ souris
@@ -324,7 +406,7 @@ public final class GameView extends JComponent {
                 }
                 if (paused) {
                     if (SwingUtilities.isLeftMouseButton(e)) {
-                        for (MenuButton b : pauseButtons) if (b.press(e.getX(), e.getY())) break;
+                        for (MenuButton b : currentPauseButtons()) if (b.press(e.getX(), e.getY())) break;
                     }
                     return;
                 }
@@ -403,9 +485,16 @@ public final class GameView extends JComponent {
             case SPELL -> session.selectSpell(action.index());
             case END_TURN -> session.endTurn();
             case MUTE -> sound.toggleMute();
-            case REPLAY -> newSession(session.setup());
-            case NEW_MAP -> newSession(session.setup().withMap(randomTheme(), randomSeed(random)));
-            case MENU -> openTitle();
+            case REPLAY -> {
+                if (online == null) newSession(session.setup());
+            }
+            case NEW_MAP -> {
+                if (online == null) newSession(session.setup().withMap(randomTheme(), randomSeed(random)));
+            }
+            case MENU -> {
+                if (online != null) online.backToLobby();
+                else openTitle();
+            }
         }
     }
 
@@ -425,6 +514,7 @@ public final class GameView extends JComponent {
         });
         bind("ENTER", () -> {
             if (menu != null) menu.key("ENTER");
+            else if (inBattle() && online != null) openBattleChat();
             else if (inBattle()) session.endTurn();
         });
         bind("LEFT", () -> {
@@ -447,11 +537,103 @@ public final class GameView extends JComponent {
             hud.setFps(0);
         });
         battleKey("R", () -> {
-            if (session.isOver()) perform(HudAction.of(HudAction.Type.REPLAY));
+            if (session.isOver() && online == null) perform(HudAction.of(HudAction.Type.REPLAY));
         });
         battleKey("N", () -> {
-            if (session.isOver()) perform(HudAction.of(HudAction.Type.NEW_MAP));
+            if (session.isOver() && online == null) perform(HudAction.of(HudAction.Type.NEW_MAP));
         });
+    }
+
+    private void openBattleChat() {
+        chatOpen = true;
+        battleChat.setFocused(true);
+    }
+
+    /** La saisie de texte est-elle active (champ d'un menu, ou chat du combat) ? */
+    private boolean typing() {
+        return (menu != null && menu.wantsText()) || (menu == null && chatOpen);
+    }
+
+    /**
+     * Saisie de texte. Quand un champ a le focus, les touches sont consommées ici : les raccourcis du jeu
+     * (D, C, M, 1-5, Espace…) ne se déclenchent pas pendant qu'on écrit.
+     */
+    private void installTyping() {
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (!typing()) {
+                    if (menu != null && e.getKeyCode() == KeyEvent.VK_TAB) menu.key("TAB");
+                    return;
+                }
+                int code = e.getKeyCode();
+                boolean ctrl = e.isControlDown() || e.isMetaDown();
+                String key = switch (code) {
+                    case KeyEvent.VK_ENTER -> "ENTER";
+                    case KeyEvent.VK_ESCAPE -> "ESCAPE";
+                    case KeyEvent.VK_BACK_SPACE -> "BACK_SPACE";
+                    case KeyEvent.VK_TAB -> e.isShiftDown() ? "shift TAB" : "TAB";
+                    case KeyEvent.VK_UP -> "UP";
+                    case KeyEvent.VK_DOWN -> "DOWN";
+                    default -> null;
+                };
+                if (ctrl && code == KeyEvent.VK_V) {
+                    typed(clipboardText());
+                } else if (key != null) {
+                    if (menu != null) menu.key(key);
+                    else battleChatKey(key);
+                }
+                e.consume();
+            }
+
+            @Override
+            public void keyTyped(KeyEvent e) {
+                if (!typing()) return;
+                char c = e.getKeyChar();
+                if (!Character.isISOControl(c) && c != KeyEvent.CHAR_UNDEFINED && !e.isControlDown()) {
+                    typed(String.valueOf(c));
+                }
+                e.consume();
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+                if (typing()) e.consume();
+            }
+        });
+        setFocusTraversalKeysEnabled(false); // Tab sert à passer d'un champ à l'autre
+    }
+
+    private void typed(String text) {
+        if (text == null || text.isEmpty()) return;
+        if (menu != null) menu.text(text);
+        else battleChat.insert(text);
+    }
+
+    private void battleChatKey(String key) {
+        switch (key) {
+            case "ENTER" -> {
+                if (online != null) online.sendChat(battleChat.text());
+                battleChat.setText("");
+                chatOpen = false;
+            }
+            case "ESCAPE" -> {
+                battleChat.setText("");
+                chatOpen = false;
+            }
+            case "BACK_SPACE" -> battleChat.backspace();
+            default -> { }
+        }
+    }
+
+    private static String clipboardText() {
+        try {
+            Object data = Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .getData(DataFlavor.stringFlavor);
+            return data == null ? "" : data.toString().replace('\n', ' ').trim();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private void battleKey(String key, Runnable action) {

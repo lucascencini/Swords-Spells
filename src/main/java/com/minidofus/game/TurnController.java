@@ -22,7 +22,20 @@ final class TurnController {
 
     private static final double NOTICE_SECONDS = 2.2;
 
+    /**
+     * Exécute les actions décidées par le joueur. En local : directement sur le combat. En ligne : la
+     * commande est envoyée au serveur et le combat n'avance qu'à la réception de sa diffusion.
+     */
+    interface Executor {
+        boolean move(Cell cell);
+
+        boolean cast(Spell spell, Cell cell);
+
+        void endTurn();
+    }
+
     private final Battle battle;
+    private final Executor executor;
     private final Highlights highlights = new Highlights();
     private Spell selected;
     private Cell hover;
@@ -36,7 +49,27 @@ final class TurnController {
     private Pathfinder.Reach reach;
 
     TurnController(Battle battle) {
+        this(battle, null);
+    }
+
+    TurnController(Battle battle, Executor executor) {
         this.battle = battle;
+        this.executor = executor != null ? executor : new Executor() {
+            @Override
+            public boolean move(Cell cell) {
+                return battle.move(cell);
+            }
+
+            @Override
+            public boolean cast(Spell spell, Cell cell) {
+                return battle.cast(spell, cell);
+            }
+
+            @Override
+            public void endTurn() {
+                battle.endTurn();
+            }
+        };
     }
 
     Highlights highlights() { return highlights; }
@@ -85,7 +118,7 @@ final class TurnController {
     void click(Cell cell) {
         if (cell == null || battle.isOver()) return;
         if (selected == null) {
-            if (!battle.move(cell) && battle.fighterAt(cell) == null && battle.active().pm() > 0) {
+            if (!executor.move(cell) && battle.fighterAt(cell) == null && battle.active().pm() > 0) {
                 notify("Case hors de portée de déplacement");
             }
             return;
@@ -98,12 +131,12 @@ final class TurnController {
 
     void endTurn() {
         selected = null;
-        battle.endTurn();
+        executor.endTurn();
     }
 
     private boolean cast(Cell cell) {
         if (!battle.canCast(selected, cell)) return false;
-        battle.cast(selected, cell);
+        executor.cast(selected, cell);
         selected = null;
         return true;
     }

@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Random;
 
 /**
+ * Point d'entrée. {@code --server} lance le serveur en ligne sans fenêtre (voir {@link com.minidofus.net.ServerMain}).
  * Point d'entrée. Sans option, le jeu s'ouvre sur l'écran titre. Avec des options, il lance directement
  * le combat décrit (pratique pour tester) :
  * <pre>
@@ -34,7 +35,11 @@ public final class Main {
 
     private Main() { }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        if (java.util.Arrays.asList(args).contains("--server")) {
+            com.minidofus.net.ServerMain.main(args); // serveur sans fenêtre : aucune classe graphique chargée
+            return;
+        }
         Random random = new Random();
         MapTheme theme = MapTheme.values()[random.nextInt(MapTheme.values().length)];
         long seed = GameView.randomSeed(random);
