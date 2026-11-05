@@ -116,14 +116,15 @@ def segment_sheet(sheet: np.ndarray):
     return fg, boxes
 
 
-def cut_pose(sheet: np.ndarray, fg: np.ndarray, box) -> Image.Image:
+def cut_pose(sheet: np.ndarray, fg: np.ndarray, box, enclosed_grey: bool = True) -> Image.Image:
     y0, x0, y1, x1 = box
     rgb = sheet[y0:y1, x0:x1].astype(int)
     mask = fg[y0:y1, x0:x1].copy()
-    # gris de fond enfermé (entre l'arc et la corde) : grandes zones grises claires
+    # gris de fond enfermé (entre l'arc et la corde) : grandes zones grises claires. Pas pour les
+    # personnages en armure, dont le casque est gris.
     grey = ((rgb.max(2) - rgb.min(2)) < 18) & (rgb.max(2) > 120) & mask
     glab, gn = ndimage.label(grey)
-    for k in range(1, gn + 1):
+    for k in range(1, gn + 1 if enclosed_grey else 1):
         if (glab == k).sum() > 40:
             mask &= glab != k
     # ne garder que le personnage (et ses parties détachées non négligeables)
@@ -178,7 +179,68 @@ def build_archer(dst: Path):
     print(f"archère : {len(poses)} poses ({canvas_w}×{canvas_h})")
 
 
-def build_archer_portrait(pose: Image.Image, path: Path):
+# ---------------------------------------------------------------------------- guerrier et mage
+
+# planche commune (tools/source/warrior_mage_sheet.png) : vignettes repérées par leur cadre (x0, y0, x1, y1).
+# Seules les poses cohérentes sont retenues (le mage tient son bâton ; sud-est de face, nord-est de dos) ;
+# sud-ouest et nord-ouest sont obtenus en miroir dans le jeu.
+SHEET_POSES = {
+    "warrior": {
+        "se_idle": (34, 62, 86, 151), "se_walk_1": (196, 61, 246, 151),
+        "se_walk_2": (278, 62, 330, 151), "se_walk_3": (367, 62, 424, 151),
+        "ne_idle": (1743, 157, 1795, 247), "ne_walk_1": (1579, 156, 1636, 247),
+        "ne_walk_2": (1824, 157, 1876, 247), "ne_walk_3": (1990, 156, 2051, 247),
+    },
+    "mage": {
+        "se_idle": (719, 391, 780, 500), "se_walk_1": (107, 392, 182, 500),
+        "se_walk_2": (964, 390, 1032, 500), "se_walk_3": (876, 393, 951, 500),
+        "ne_idle": (1579, 389, 1640, 500), "ne_walk_1": (1221, 388, 1287, 500),
+        "ne_walk_2": (1308, 390, 1367, 500), "ne_walk_3": (1052, 386, 1127, 500),
+    },
+}
+SHEET_UPSCALE = 2            # la planche est petite : agrandie une fois ici plutôt qu'à chaque image
+PORTRAIT_COLORS = {"archer": ((70, 112, 58), (22, 44, 24)), "warrior": ((128, 58, 44), (46, 18, 14)),
+                   "mage": ((58, 84, 150), (18, 26, 58))}
+
+
+def place_poses(poses: dict, out: Path, prefix: str):
+    """Pose toutes les images sur un même canevas, pieds alignés en bas au centre ; renvoie sa taille."""
+    half = max(max(feet_center(p), p.width - feet_center(p)) for p in poses.values())
+    height = max(p.height for p in poses.values())
+    canvas_w = int(np.ceil(half * 2)) + 2
+    canvas_h = int(np.ceil(height / (1 - FEET_MARGIN)))
+    out.mkdir(parents=True, exist_ok=True)
+    for name, p in poses.items():
+        c = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+        x = int(round(canvas_w / 2 - feet_center(p)))
+        y = int(round(canvas_h * (1 - FEET_MARGIN))) - p.height
+        c.paste(p, (x, y), p)
+        c.save(out / f"{prefix}_{name}.png", optimize=True)
+    return canvas_w, canvas_h
+
+
+def build_sheet_classes(dst: Path):
+    sheet = np.array(Image.open(SOURCE / "warrior_mage_sheet.png").convert("RGB"))
+    rgb = sheet.astype(int)
+    greyish = ((rgb.max(2) - rgb.min(2)) < 16) & (rgb.max(2) > 100)       # fond et ombres au sol
+    lab, _ = ndimage.label(greyish)
+    border = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
+    fg = ~np.isin(lab, list(border))
+    for cls, table in SHEET_POSES.items():
+        poses = {}
+        for name, (x0, y0, x1, y1) in table.items():
+            img = cut_pose(sheet, fg, (y0, x0, y1, x1), enclosed_grey=False)
+            img = img.crop(img.getchannel("A").getbbox())
+            poses[name] = img.resize((img.width * SHEET_UPSCALE, img.height * SHEET_UPSCALE), Image.LANCZOS)
+        w, h = place_poses(poses, dst / "characters", cls)
+        figure = max(p.height for p in poses.values())
+        for old in (dst / "characters").glob(f"{cls}_[0-9].png"):
+            old.unlink()  # anciennes poses fixes du pack
+        build_archer_portrait(poses["se_idle"], dst / "ui" / f"portrait_{cls}.png", PORTRAIT_COLORS[cls])
+        print(f"{cls} : {len(poses)} poses ({w}×{h}), échelle conseillée {69 / figure:.3f}")
+
+
+def build_archer_portrait(pose: Image.Image, path: Path, colors=None):
     """Portrait dans le style des autres (cadre octogonal bronze, fond coloré, tête en gros plan)."""
     W, H = 76, 83
     S = 4
@@ -196,7 +258,7 @@ def build_archer_portrait(pose: Image.Image, path: Path):
     inner = octagon(3 * S)
     bg = Image.new("RGBA", big.size)
     grad = np.linspace(0, 1, big.size[1])[:, None]
-    top, bottom = np.array([70, 112, 58]), np.array([22, 44, 24])
+    top, bottom = (np.array(c) for c in (colors or PORTRAIT_COLORS["archer"]))
     col = (top * (1 - grad) + bottom * grad).astype(np.uint8)
     bg_arr = np.dstack([np.repeat(col[:, None, :], big.size[0], axis=1).reshape(big.size[1], big.size[0], 3),
                         np.full((big.size[1], big.size[0]), 255, np.uint8)])
@@ -289,7 +351,7 @@ def extend_borders(img: np.ndarray, pad: int) -> np.ndarray:
     dist = np.maximum(np.maximum(pad - xx, xx - (w - pad - 1)), np.maximum(pad - yy, yy - (h - pad - 1)))
     t = np.clip(dist / pad, 0, 1)[:, :, None]
     dark = (blurred * (1 - 0.45 * t)).astype(np.uint8)
-    blend = np.clip(dist / 24.0, 0, 1)[:, :, None]  # transition douce sur 24 px
+    blend = np.clip(dist / 90.0, 0, 1)[:, :, None]  # transition douce sur 90 px
     return (big * (1 - blend) + dark * blend).astype(np.uint8)
 
 
@@ -304,6 +366,10 @@ def build_forest(dst: Path):
     out.mkdir(parents=True, exist_ok=True)
     Image.fromarray(extended).save(out / "forest.jpg", quality=90, optimize=True)
     text, scale = grid_properties(corners, h, pad, "forest.jpg")
+    text += ("# ombres portées : décalage par unité de hauteur (x, y) et opacité ; lumière venant du haut à gauche\n"
+             "shadow = 0.42, 0.2, 0.34\n"
+             "# premier plan : feuillage flou dans les coins bas, qui se balance\n"
+             "foreground = forest_fg\nforeground.sway = true\n")
     (out / "forest.properties").write_text(text, encoding="utf-8")
     print(f"forêt : grille en perspective, coins {np.round(corners).astype(int).tolist()}, échelle {scale:.3f}")
 
@@ -388,15 +454,16 @@ def desert_extend(top: np.ndarray, ext: int) -> np.ndarray:
     d0 = np.maximum(132.0, h0 - blend - edge)     # là où la coupe tombe déjà en pleine falaise : avant la coupe
     yc = np.arange(h0 + ext, dtype=np.float32)[:, None]
     depth = yc - edge[None]
+    cliff_cols = np.clip(np.minimum(x - 140, 1160 - x) / 30, 0, 1)   # hors des falaises : sol, pas de recopie
     for y in range(h0 - blend, h0 + ext):
-        w_ = np.clip((depth[y] - d0) / blend, 0, 1)
+        w_ = np.clip((depth[y] - d0) / blend, 0, 1) * cliff_cols
         if w_.any():
             full[y] = full[y] * (1 - w_[:, None]) + full[y - repeat] * w_[:, None]
     # brume de poussière : le plateau domine le désert ; hors des falaises (côtés), le sol s'y fond vite
     t = np.clip((depth - 150) / 150, 0, 1)
     outer = np.clip(np.maximum(150 - x, x - 1150) / 40, 0, 1)[None]
-    t = np.maximum(t, outer * np.clip((yc - h0 + 2) / 18, 0, 1))
-    t = np.where(yc < h0, 0, t) ** 1.1
+    t = np.maximum(t, outer * np.clip((yc - h0 + 30) / 90, 0, 1))
+    t = np.where(yc < h0 - 30, 0, t) ** 1.1
     haze = cv2.GaussianBlur(full, (0, 0), 18) * 0.35 + np.array([206, 128, 78], np.float32) * 0.65
     return (full * (1 - t[..., None]) + haze * t[..., None]).clip(0, 255).astype(np.uint8)
 
@@ -448,6 +515,10 @@ def build_desert(dst: Path):
     Image.fromarray(big).save(out / "desert.jpg", quality=90, optimize=True)
     Image.fromarray((a_big * 255).clip(0, 255).astype(np.uint8)).save(out / "desert.alpha.png", optimize=True)
     text, scale = grid_properties(corners, h, pad, "desert.jpg")
+    text += ("# ombres portées : soleil en haut à droite (ombres longues vers le bas à gauche)\n"
+             "shadow = -0.62, 0.3, 0.42\n"
+             "# premier plan : rochers et plantes floues à contre-jour, voile de poussière qui dérive\n"
+             "foreground = desert_fg\nforeground.dust = true\n")
 
     # ciel animé : images agrandies et adoucies, empilées verticalement dans un seul JPEG
     gif = Image.open(SOURCE / "desert_sky.gif")
@@ -491,13 +562,129 @@ def build_desert(dst: Path):
     print(f"désert : {len(DESERT_PROPS)} éléments détourés")
 
 
+# ---------------------------------------------------------------------------- premier plan
+
+def noise_field(h, w, scale, seed):
+    """Bruit lissé (somme d'octaves) dans [0, 1]."""
+    rng = np.random.default_rng(seed)
+    out = np.zeros((h, w), np.float32)
+    amp, total = 1.0, 0.0
+    for octave in range(4):
+        s = max(2, int(scale / (2 ** octave)))
+        small = rng.random((h // s + 2, w // s + 2)).astype(np.float32)
+        out += amp * cv2.resize(small, (w + 2 * s, h + 2 * s), interpolation=cv2.INTER_CUBIC)[s:s + h, s:s + w]
+        total += amp
+        amp *= 0.5
+    out /= total
+    return (out - out.min()) / (out.max() - out.min())
+
+
+def corner_mask(h, w, seed, reach=1.0):
+    """Masse irrégulière partant du coin bas-gauche (bords feuillus), en [0, 1]."""
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    d = np.hypot(xx / (w * 0.95 * reach), (h - yy) / (h * 0.95 * reach))
+    n = noise_field(h, w, 26, seed)
+    m = np.clip((1.0 - d) * 2.4 + (n - 0.5) * 1.6, 0, 1)
+    return cv2.GaussianBlur(m, (0, 0), 1.2)
+
+
+def save_fg(rgb, alpha, path, blur):
+    """Élément de premier plan : flou (hors de la mise au point) et assombri (à contre-jour)."""
+    rgba = np.dstack([rgb.astype(np.float32) * alpha[..., None], alpha])           # prémultiplié pour flouter
+    rgba = cv2.GaussianBlur(rgba, (0, 0), blur)
+    a = np.clip(rgba[..., 3], 1e-4, 1)
+    rgb_out = np.clip(rgba[..., :3] / a[..., None], 0, 255)
+    Image.fromarray(np.dstack([rgb_out, a * 255]).astype(np.uint8), "RGBA").save(path, optimize=True)
+
+
+def foliage(w, h, seed):
+    """Branches feuillues partant du coin bas-gauche (dessinées en 3× puis réduites) : couleurs et alpha."""
+    rng = np.random.default_rng(seed)
+    S = 3
+    img = Image.new("RGBA", (w * S, h * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    greens = [(34, 58, 30), (46, 78, 36), (60, 96, 42), (28, 48, 34), (74, 110, 48)]
+    stems = []
+    for branch in range(9):
+        # tige courbe depuis le coin vers le haut / la droite
+        ang = rng.uniform(0.15, 1.35)
+        length = rng.uniform(0.55, 1.0) * min(w, h * 1.3) * S
+        x, y = rng.uniform(-0.05, 0.25) * w * S, h * S * rng.uniform(0.95, 1.1)
+        bend = rng.uniform(-0.6, 0.6)
+        pts = []
+        for t in np.linspace(0, 1, 40):
+            a = ang + bend * t
+            pts.append((x + np.cos(a) * length * t, y - np.sin(a) * length * t))
+        stems.append((pts, int(4 * S * (1 - 0.5 * branch / 9))))
+        for t in np.linspace(0.08, 1, 34):
+            px, py = pts[int(t * 39)]
+            for side_sign in (-1, 1):
+                a = ang + bend * t + side_sign * rng.uniform(0.6, 1.2)
+                L = rng.uniform(26, 44) * S * (1.1 - 0.4 * t)
+                W = L * rng.uniform(0.38, 0.52)
+                cx, cy = px + np.cos(a) * L * 0.45, py - np.sin(a) * L * 0.45
+                leaf = [(cx + np.cos(a) * L / 2, cy - np.sin(a) * L / 2),
+                        (cx + np.cos(a + 1.57) * W / 2, cy - np.sin(a + 1.57) * W / 2),
+                        (cx - np.cos(a) * L / 2, cy + np.sin(a) * L / 2),
+                        (cx - np.cos(a + 1.57) * W / 2, cy + np.sin(a + 1.57) * W / 2)]
+                g = greens[rng.integers(len(greens))]
+                d.polygon(leaf, fill=g + (255,))
+    for pts, width in stems:                                     # tiges par-dessus : jamais de jour au milieu
+        d.line([(float(x), float(y)) for x, y in pts], fill=(40, 34, 24, 255), width=width)
+    small = np.array(img.resize((w, h), Image.LANCZOS)).astype(np.float32)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    edge = np.clip(yy / 60, 0, 1) * np.clip((w - 1 - xx) / 60, 0, 1)        # jamais coupé net
+    return small[..., :3], small[..., 3] / 255 * edge
+
+
+def build_foreground(dst: Path):
+    out = dst / "backdrops"
+    # forêt : branches feuillues dessinées dans les verts de l'illustration, depuis chaque coin bas
+    for side, seed in (("left", 3), ("right", 5)):
+        rgb, alpha = foliage(420, 300, seed)
+        if side == "right":
+            rgb, alpha = rgb[:, ::-1], alpha[:, ::-1]
+        save_fg(rgb, alpha, out / f"forest_fg_{side}.png", 2.6)
+    # désert : rochers et plantes de la planche, agrandis, assombris et flous
+    decor = dst / "decor"
+
+    def layer(canvas, name, x, y, scale, dark):
+        im = Image.open(decor / f"{name}.png")
+        im = im.resize((int(im.width * scale), int(im.height * scale)), Image.LANCZOS)
+        a = np.array(im).astype(np.float32)
+        a[..., :3] *= dark
+        canvas.alpha_composite(Image.fromarray(a.clip(0, 255).astype(np.uint8)), (x, y - im.height))
+
+    for side, parts in (("left", [("desert_rock_1", 0, 330, 2.4, 0.4), ("desert_grass_1", 170, 330, 2.0, 0.36),
+                                  ("desert_agave_2", -60, 330, 2.2, 0.32)]),
+                        ("right", [("desert_rock_3", 140, 330, 2.6, 0.4), ("desert_agave_1", 30, 330, 2.0, 0.36),
+                                   ("desert_grass_2", 300, 330, 1.8, 0.32)])):
+        canvas = Image.new("RGBA", (460, 330), (0, 0, 0, 0))
+        for name, x, y, sc, dark in parts:
+            layer(canvas, name, x, y, sc, dark)
+        arr = np.array(canvas).astype(np.float32)
+        save_fg(arr[..., :3], arr[..., 3] / 255, out / f"desert_fg_{side}.png", 2.6)
+    # poussière : texture raccordable horizontalement, voile chaud
+    h, w = 256, 1024
+    n = noise_field(h, w + 256, 90, 11)
+    n = n[:, :w]
+    n = np.concatenate([n, n[:, ::-1]], 1)                                          # miroir : raccord parfait
+    n = cv2.resize(n, (w, h))
+    a = np.clip((n - 0.35) * 1.8, 0, 1) * (np.linspace(0, 1, h) ** 1.5)[:, None]
+    rgb = np.zeros((h, w, 3), np.float32) + np.array([236, 170, 110], np.float32)
+    Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA").save(out / "dust.png", optimize=True)
+    print("premier plan : forêt (feuillage), désert (rochers, plantes, poussière)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dst", required=True, type=Path)
     args = ap.parse_args()
     build_archer(args.dst)
+    build_sheet_classes(args.dst)
     build_forest(args.dst)
     build_desert(args.dst)
+    build_foreground(args.dst)
 
 
 if __name__ == "__main__":
