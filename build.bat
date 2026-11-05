@@ -35,6 +35,21 @@ if %JMAJ% LSS 17 (
 )
 echo JDK detecte : javac %JV%
 
+rem Les outils jar et jpackage ne sont pas toujours dans le PATH (par exemple avec le raccourci
+rem "Oracle\Java\javapath", qui ne contient que java et javac) : on les cherche dans le dossier du JDK.
+set JDK_HOME=
+for /f "tokens=1,* delims==" %%a in ('javac -J-XshowSettings:properties -version 2^>^&1 ^| findstr /c:"java.home"') do set JDK_HOME=%%b
+if defined JDK_HOME set JDK_HOME=!JDK_HOME:~1!
+set JAR_EXE=jar
+set JPACKAGE_EXE=jpackage
+if exist "!JDK_HOME!\bin\jar.exe" (
+  set JAR_EXE="!JDK_HOME!\bin\jar.exe"
+  set JPACKAGE_EXE="!JDK_HOME!\bin\jpackage.exe"
+) else if defined JAVA_HOME if exist "!JAVA_HOME!\bin\jar.exe" (
+  set JAR_EXE="!JAVA_HOME!\bin\jar.exe"
+  set JPACKAGE_EXE="!JAVA_HOME!\bin\jpackage.exe"
+)
+
 rem ------------------------------------------------------------ compilation
 echo.
 echo == Compilation
@@ -80,9 +95,10 @@ if errorlevel 1 (
 rem ------------------------------------------------------------ JAR
 echo.
 echo == JAR
-jar --create --file "%OUT%\mini-dofus.jar" --main-class com.minidofus.Main -C "%OUT%\classes" .
+%JAR_EXE% --create --file "%OUT%\mini-dofus.jar" --main-class com.minidofus.Main -C "%OUT%\classes" .
 if errorlevel 1 (
   echo [ERREUR] Creation du JAR impossible.
+  echo          Outil utilise : %JAR_EXE%  ^(dossier du JDK : !JDK_HOME!^)
   goto :fail
 )
 echo OK : %OUT%\mini-dofus.jar
@@ -99,7 +115,7 @@ if exist "%OUT%\dist" rmdir /s /q "%OUT%\dist"
 if exist "%OUT%\jpackage-input" rmdir /s /q "%OUT%\jpackage-input"
 mkdir "%OUT%\jpackage-input"
 copy /y "%OUT%\mini-dofus.jar" "%OUT%\jpackage-input\" >nul
-jpackage --type app-image --name SwordsAndSpells --app-version 1.0.0 --input "%OUT%\jpackage-input" --main-jar mini-dofus.jar --main-class com.minidofus.Main --add-modules java.desktop --jlink-options "--strip-debug --no-header-files --no-man-pages --strip-native-commands" --icon packaging\icon.ico --dest "%OUT%\dist"
+%JPACKAGE_EXE% --type app-image --name SwordsAndSpells --app-version 1.0.0 --input "%OUT%\jpackage-input" --main-jar mini-dofus.jar --main-class com.minidofus.Main --add-modules java.desktop --jlink-options "--strip-debug --no-header-files --no-man-pages --strip-native-commands" --icon packaging\icon.ico --dest "%OUT%\dist"
 if errorlevel 1 (
   echo [ERREUR] jpackage a echoue.
   goto :fail
