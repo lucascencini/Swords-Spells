@@ -12,6 +12,12 @@ Import des illustrations fournies dans tools/source/ vers src/main/resources/.
    - les rochers peints sur le plateau sont effacés (les obstacles du jeu sont générés à part) ;
    - les bords sont prolongés (flou) pour que la caméra ne sorte jamais de l'image ;
    - forest.properties indique où placer la grille de jeu sur l'image.
+3. Désert (tools/source/desert_sheet.png + desert_sky.gif) : planche plateau + éléments sur un damier peint
+   (pas de vraie transparence).
+   - le damier est retiré : le ciel animé (GIF) apparaît derrière les montagnes ;
+   - la pointe avant du plateau, coupée par le cadre, est reconstruite en prolongeant chaque falaise le long
+     de son bord, puis les falaises plongent dans une brume de poussière ;
+   - les éléments sont détourés : rochers et cactus (obstacles), buissons, fleurs, cailloux (décor au sol).
 
 Usage : python3 tools/import_sources.py --dst src/main/resources
 Dépendances : Pillow, numpy, scipy, opencv-python.
@@ -295,12 +301,209 @@ def build_forest(dst: Path):
     print(f"forêt : grille centrée en ({cx}, {cy}), demi-largeur {hw:.0f} px, échelle {scale:.3f}")
 
 
+# ---------------------------------------------------------------------------- désert
+
+DESERT_CUT = 486                 # dernière ligne utile du plateau dans la planche (le damier commence dessous)
+DESERT_PROPS_Y = 496             # début de la rangée d'éléments
+DESERT_EDGE_SLOPE = 0.525        # pente des deux bords avant du plateau (symétriques)
+DESERT_EDGE_POINT = (250, 335)   # un point du bord avant gauche
+DESERT_TIP_X = 650.0             # abscisse de la pointe avant (rencontre des deux bords)
+DESERT_PLATEAU = [(628, 36), (122, 268), (650, 545), (1163, 282)]  # coins : arrière, gauche, avant, droite
+SKY_SCALE = 2                    # agrandissement des images du ciel
+
+# éléments de la planche (cadre x0, y0, x1, y1 sous DESERT_PROPS_Y) -> nom du sprite
+DESERT_PROPS = {
+    "desert_rock_1": (14, 5, 159, 97), "desert_rock_2": (166, 11, 273, 88),
+    "desert_rock_3": (12, 108, 139, 179), "desert_rock_4": (32, 263, 141, 338),
+    "desert_saguaro_1": (1141, 14, 1184, 129), "desert_saguaro_2": (1198, 6, 1253, 151),
+    "desert_barrel_1": (1165, 158, 1219, 231), "desert_barrel_2": (995, 227, 1045, 289),
+    "desert_flowers_1": (627, 13, 714, 84), "desert_flowers_2": (730, 23, 832, 99),
+    "desert_flowers_3": (842, 26, 917, 110), "desert_flowers_4": (656, 91, 733, 146),
+    "desert_flowers_5": (762, 101, 875, 179), "desert_flowers_6": (175, 183, 265, 238),
+    "desert_grass_1": (921, 32, 995, 105), "desert_grass_2": (905, 119, 979, 188),
+    "desert_grass_3": (673, 155, 748, 213), "desert_agave_1": (487, 6, 601, 92),
+    "desert_agave_2": (43, 190, 167, 251), "desert_pebbles_1": (157, 122, 245, 165),
+    "desert_pebbles_2": (431, 131, 521, 169), "desert_pebbles_3": (735, 299, 823, 334),
+}
+
+
+def checker_background(rgb: np.ndarray) -> np.ndarray:
+    """Pixels du damier peint : gris neutres (les blancs des fleurs, plus clairs, sont conservés)."""
+    c = rgb.astype(int)
+    return ((c.max(2) - c.min(2)) < 14) & (c.mean(2) < 200)
+
+
+def desert_extend(top: np.ndarray, ext: int) -> np.ndarray:
+    """
+    Ajoute {ext} lignes sous la coupe. La pointe du plateau et le haut des falaises sont reconstruits en
+    recopiant chaque falaise le long de son propre bord (fondus aux raccords). Plus bas, l'image ne contient
+    plus rien d'utilisable : le bas des falaises est prolongé par recopie verticale, puis tout se fond dans
+    une brume de poussière.
+    """
+    h0, w = top.shape[:2]
+    src = top.astype(np.float32)
+    sl, tip = DESERT_EDGE_SLOPE, DESERT_TIP_X
+    period = 150.0                       # pas de recopie le long du bord
+    rise = sl * period
+    feather = 22.0
+    base = h0 - 1 - feather              # les fondus ne lisent jamais sous la coupe
+    overlap = 20                         # fondu au-dessus de la coupe : aucun raccord sur la dernière ligne
+    yy, xx = np.mgrid[h0 - overlap:h0 + ext, 0:w].astype(np.float32)
+
+    def sample(img, sx, sy):
+        return cv2.remap(img, sx.astype(np.float32), sy.astype(np.float32), cv2.INTER_LINEAR,
+                         borderMode=cv2.BORDER_REFLECT)
+
+    def along_edge(direction):
+        k = np.maximum(np.ceil((yy - base) / rise), 1)
+        sy = yy - k * rise
+        sx = xx - direction * k * period
+        here = sample(src, sx, sy)
+        before = sample(src, sx + direction * period, sy + rise)      # copie précédente (plus haut)
+        after = sample(src, sx - direction * period, sy - rise)       # copie suivante (plus bas)
+        w_before = (np.clip(1 - (sy - (base - rise)) / feather, 0, 1) * 0.5)[..., None]
+        w_after = (np.clip(1 - (base - sy) / feather, 0, 1) * 0.5)[..., None]
+        return here * (1 - w_before - w_after) + before * w_before + after * w_after
+
+    left, right = along_edge(1), along_edge(-1)
+    seam = np.clip((xx - (tip - 5)) / 10, 0, 1)[..., None]
+    synth = left * (1 - seam) + right * seam
+    ramp = np.clip((np.arange(overlap, dtype=np.float32) + 1) / (overlap + 1), 0, 1)[:, None, None]
+    synth[:overlap] = src[h0 - overlap:] * (1 - ramp) + synth[:overlap] * ramp
+    full = np.concatenate([src[:h0 - overlap], synth], 0)
+
+    x = np.arange(w, dtype=np.float32)
+    ex, ey = DESERT_EDGE_POINT
+    edge = np.where(x < tip, ey + sl * (x - ex), ey + sl * ((2 * tip - ex) - x))
+    # bas des falaises : recopie verticale (période {repeat}) à partir de la profondeur d0 ; le départ est
+    # fondu sur {blend} lignes, si bien que chaque copie prolonge la précédente sans couture
+    repeat, blend = 64, 24
+    d0 = np.maximum(132.0, h0 - blend - edge)     # là où la coupe tombe déjà en pleine falaise : avant la coupe
+    yc = np.arange(h0 + ext, dtype=np.float32)[:, None]
+    depth = yc - edge[None]
+    for y in range(h0 - blend, h0 + ext):
+        w_ = np.clip((depth[y] - d0) / blend, 0, 1)
+        if w_.any():
+            full[y] = full[y] * (1 - w_[:, None]) + full[y - repeat] * w_[:, None]
+    # brume de poussière : le plateau domine le désert ; hors des falaises (côtés), le sol s'y fond vite
+    t = np.clip((depth - 150) / 150, 0, 1)
+    outer = np.clip(np.maximum(150 - x, x - 1150) / 40, 0, 1)[None]
+    t = np.maximum(t, outer * np.clip((yc - h0 + 2) / 18, 0, 1))
+    t = np.where(yc < h0, 0, t) ** 1.1
+    haze = cv2.GaussianBlur(full, (0, 0), 18) * 0.35 + np.array([206, 128, 78], np.float32) * 0.65
+    return (full * (1 - t[..., None]) + haze * t[..., None]).clip(0, 255).astype(np.uint8)
+
+
+def desert_pad(rgb: np.ndarray, alpha: np.ndarray, pad: int):
+    """
+    Marge autour de l'illustration pour la caméra : sur les côtés et en bas, brume de poussière ; au-dessus
+    de l'horizon, transparent (le ciel apparaît). Les bords de l'illustration s'y fondent progressivement.
+    """
+    h, w = alpha.shape
+    big = cv2.copyMakeBorder(rgb, pad, pad, pad, pad, cv2.BORDER_REFLECT).astype(np.float32)
+    yy, xx = np.mgrid[0:h + 2 * pad, 0:w + 2 * pad].astype(np.float32)
+    dx = np.maximum(pad - xx, xx - (w + pad - 1))                 # > 0 hors de l'image, < 0 dedans
+    dy = yy - (h + pad - 1)
+    d = np.maximum(dx, dy)
+    t = (np.clip((d + 110) / 230, 0, 1) ** 1.3)[..., None]
+    haze = cv2.GaussianBlur(big, (0, 0), 24) * 0.3 + np.array([206, 128, 78], np.float32) * 0.7
+    big = big * (1 - t) + haze * t
+    a = np.zeros(big.shape[:2], np.float32)
+    a[pad:pad + h, pad:pad + w] = alpha
+    horizon = np.clip((yy - pad - 110) / 70, 0, 1)               # sol opaque sous l'horizon
+    side = np.clip((dx + 110) / 110, 0, 1)                        # bords gauche et droit
+    a = a * (1 - side) + horizon * side
+    a[yy > h + pad - 1] = 1
+    a[yy < pad] = 0
+    return big.clip(0, 255).astype(np.uint8), a
+
+
+def desert_fit_grid():
+    """Plus grand losange aux proportions de la grille dans le plateau (avec une marge de sable)."""
+    h, w = 700, 1300
+    poly = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(poly).polygon(DESERT_PLATEAU, fill=1)
+    mask = np.array(poly).astype(bool)
+    mask = ndimage.binary_erosion(mask, iterations=14)
+    return fit_grid(mask)
+
+
+def build_desert(dst: Path):
+    sheet = np.array(Image.open(SOURCE / "desert_sheet.png").convert("RGB"))
+    top = sheet[:DESERT_CUT]
+    # ciel : damier relié au bord supérieur
+    lab, _ = ndimage.label(checker_background(top))
+    sky = np.isin(lab, list(set(np.unique(lab[0])) - {0}))
+    sky = ndimage.binary_dilation(sky, iterations=1)                        # liseré gris des montagnes
+    alpha = cv2.GaussianBlur((~sky).astype(np.float32), (0, 0), 0.8)
+    rgb = top.copy()
+    rgb[sky] = (196, 112, 86)                                               # sous le ciel : teinte des montagnes
+    ext = 320
+    rgb = desert_extend(rgb, ext)
+    alpha = np.concatenate([alpha, np.ones((ext, alpha.shape[1]), np.float32)], 0)
+    alpha[:24] *= np.linspace(0, 1, 24)[:, None]                            # sommet coupé : fondu dans le ciel
+
+    pad = 220
+    big, a_big = desert_pad(rgb, alpha, pad)
+    cx, cy, hw = desert_fit_grid()
+    hw *= 0.97
+    out = dst / "backdrops"
+    out.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(big).save(out / "desert.jpg", quality=90, optimize=True)
+    Image.fromarray((a_big * 255).clip(0, 255).astype(np.uint8)).save(out / "desert.alpha.png", optimize=True)
+    scale = hw / GRID_HALF_W
+
+    # ciel animé : images agrandies et adoucies, empilées verticalement dans un seul JPEG
+    gif = Image.open(SOURCE / "desert_sky.gif")
+    frames = []
+    for i in range(gif.n_frames):
+        gif.seek(i)
+        f = gif.convert("RGB").resize((gif.width * SKY_SCALE, gif.height * SKY_SCALE), Image.LANCZOS)
+        frames.append(np.array(f.filter(ImageFilter.GaussianBlur(1.2))))
+    Image.fromarray(np.concatenate(frames, 0)).save(out / "desert_sky.jpg", quality=88, optimize=True)
+    (out / "desert.properties").write_text(
+        "# Placement de la grille sur desert.jpg (généré par tools/import_sources.py)\n"
+        "# centerX/centerY : pixel de l'image sous le centre de la grille ; scale : pixels par unité monde\n"
+        f"centerX = {cx + pad:.1f}\ncenterY = {cy + pad:.1f}\nscale = {scale:.4f}\n"
+        "# ciel animé derrière l'illustration : images empilées dans desert_sky.jpg\n"
+        f"sky = desert_sky\nskyFrames = {len(frames)}\n"
+        f"# ligne de l'illustration où se pose le bas du ciel (horizon derrière les montagnes)\nskyBottom = {pad + 230}\n",
+        encoding="utf-8")
+    print(f"désert : grille centrée en ({cx}, {cy}), demi-largeur {hw:.0f} px, échelle {scale:.3f}")
+
+    # éléments
+    props = sheet[DESERT_PROPS_Y:]
+    bg = checker_background(props)
+    fg = ndimage.binary_closing(ndimage.binary_opening(~bg, iterations=1), iterations=4)
+    lab, _ = ndimage.label(fg)
+    decor = dst / "decor"
+    for name, (x0, y0, x1, y1) in DESERT_PROPS.items():
+        sub = lab[y0:y1 + 1, x0:x1 + 1]
+        ids, counts = np.unique(sub[sub > 0], return_counts=True)
+        m = np.zeros(fg.shape, bool)
+        m[y0:y1 + 1, x0:x1 + 1] = sub == ids[np.argmax(counts)]
+        m &= ~bg
+        parts, n = ndimage.label(m)
+        if n > 1:                                                           # fragments isolés
+            sizes = ndimage.sum(m, parts, range(1, n + 1))
+            m = np.isin(parts, [i + 1 for i in range(n) if sizes[i] >= 0.08 * sizes.max()])
+        ys, xs = np.nonzero(m)
+        by0, by1, bx0, bx1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        a8 = (m[by0:by1, bx0:bx1] * 255).astype(np.uint8)
+        a8 = cv2.GaussianBlur(np.maximum(cv2.erode(a8, np.ones((3, 3), np.uint8)), (a8 * 0.35).astype(np.uint8)),
+                              (3, 3), 0.7)
+        img = np.dstack([props[by0:by1, bx0:bx1], a8])
+        Image.fromarray(img).save(decor / f"{name}.png", optimize=True)
+    print(f"désert : {len(DESERT_PROPS)} éléments détourés")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dst", required=True, type=Path)
     args = ap.parse_args()
     build_archer(args.dst)
     build_forest(args.dst)
+    build_desert(args.dst)
 
 
 if __name__ == "__main__":

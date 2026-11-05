@@ -17,7 +17,7 @@ public final class MapTests {
         int lakeWithWater = 0;
         int pathWithStone = 0;
         int frozen = 0;
-        int oasis = 0;
+        int dryDesert = 0;
         int problems = 0;
         for (MapTheme theme : MapTheme.values()) {
             for (long seed = 0; seed < 300; seed++) {
@@ -55,10 +55,10 @@ public final class MapTests {
                 if (theme == MapTheme.LAKE && water >= 10) lakeWithWater++;
                 if (theme == MapTheme.RUINS && stone >= 20) pathWithStone++;
                 if (theme == MapTheme.SNOW && ice >= 10) frozen++;
-                if (theme == MapTheme.DESERT && water >= 5) oasis++;
+                if (theme == MapTheme.DESERT && water == 0) dryDesert++;
                 if (theme != MapTheme.SNOW && ice != 0) { problems++; Check.that(false, tag + " : glace hors montagne"); }
-                boolean wet = theme.feature() == MapTheme.Feature.LAKE || theme.feature() == MapTheme.Feature.OASIS;
-                if (!wet && water != 0) { problems++; Check.that(false, tag + " : eau hors lac et oasis"); }
+                boolean wet = theme.feature() == MapTheme.Feature.LAKE;
+                if (!wet && water != 0) { problems++; Check.that(false, tag + " : eau hors lac"); }
 
                 for (DecorPlacement d : a.decor()) {
                     if (d.kind().role() == DecorKind.Role.TREE) {
@@ -75,7 +75,7 @@ public final class MapTests {
         Check.equal(300, lakeWithWater, "chaque carte « lac » contient un étang d'au moins 10 cases");
         Check.equal(300, pathWithStone, "chaque carte « ruines » a un chemin de pierre");
         Check.equal(300, frozen, "chaque carte « neige » a un lac gelé");
-        Check.equal(300, oasis, "chaque carte « désert » a une oasis");
+        Check.equal(300, dryDesert, "les cartes « désert » n'ont pas d'eau (plateau de sable)");
         Check.equal(0, problems, "toutes les cartes générées sont valides");
 
         Check.suite("Reproductibilité des cartes");

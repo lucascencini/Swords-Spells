@@ -108,7 +108,7 @@ anticipe aussi la riposte adverse.
 | Ruines anciennes | prairie | chemin pavé, caisses |
 | Bord de lac | prairie | étang infranchissable |
 | Col enneigé | neige | lac gelé (praticable), sapins enneigés, flocons |
-| Désert brûlant | désert | oasis, cactus (destructibles), poussière |
+| Désert brûlant | désert | illustration d'un plateau rocheux sous un ciel animé, rochers et cactus (destructibles), poussière |
 | Crypte oubliée | souterrain | piliers, torches et braises |
 
 Chaque carte a son ambiance sonore en boucle (coupée avec `M`).
@@ -209,8 +209,12 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
 - **Illustrations fournies** : `tools/import_sources.py` importe les fichiers de `tools/source/` :
   la planche de l'Archère (détourage, choix des poses de repos et de marche, alignement des pieds,
   portrait) et le fond de la forêt (rochers peints effacés dans l'aire de jeu, bords prolongés, calage de
-  la grille dans `backdrops/forest.properties`). Pour une nouvelle carte illustrée : ajouter l'image,
-  l'importer de la même façon et indiquer son nom dans `MapTheme`.
+  la grille dans `backdrops/forest.properties`), et la planche du désert : damier peint retiré, pointe du
+  plateau reconstruite (falaises prolongées puis fondues dans la brume), ciel animé (GIF) placé derrière
+  les montagnes, rochers, cactus, buissons et fleurs détourés. Une illustration JPEG peut avoir sa
+  transparence dans un masque `<nom>.alpha.png`, et un ciel animé (`sky`, `skyFrames`, `skyBottom` dans le
+  fichier `.properties`). Pour une nouvelle carte illustrée : ajouter l'image, l'importer de la même façon
+  et indiquer son nom dans `MapTheme`.
 - **Ambiances sonores** : `tools/ambience.py` les synthétise (bruit filtré et oscillateurs, boucles de
   16 s sans couture). Aucun fichier extérieur ; modifiez le script pour changer le caractère d'une carte.
 
