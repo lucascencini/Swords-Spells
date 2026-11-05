@@ -14,7 +14,6 @@ import com.minidofus.ui.Hud;
 import com.minidofus.ui.UiTheme;
 import com.minidofus.view.BattleScene;
 import com.minidofus.view.FighterView;
-import com.minidofus.view.Iso;
 import com.minidofus.view.anim.Animation;
 import com.minidofus.view.anim.AnimationQueue;
 import com.minidofus.view.fx.Arrow;
@@ -206,7 +205,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             case POISON -> sequence(face, call(() -> Sfx.POISON.play(sound)),
                     projectile(caster, target, assets.tinted(assets.image("fx/arcane"), "poison", UiTheme.POISON), 0.38, 30, 0.45, false),
                     call(() -> scene.effects().add(new Burst(assets.tinted(assets.image("fx/arcane"), "poison", UiTheme.POISON),
-                            Iso.worldX(target.x(), target.y()), Iso.worldY(target.x(), target.y()) - 16, 0.4, 0.9, 0.4, 0))));
+                            scene.projection().x(target.x(), target.y()), scene.projection().y(target.x(), target.y()) - 16, 0.4, 0.9, 0.4, 0))));
             case FIREBALL -> sequence(face, call(() -> Sfx.FIREBALL.play(sound)),
                     projectile(caster, target, assets.image("fx/fire_projectile"), 0.42, 34, 0.6, true),
                     call(() -> {
@@ -404,8 +403,8 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     }
 
     /** Centre d'une case, à hauteur de poitrine d'un combattant. */
-    private static Point2D.Double cellPoint(Cell c) {
-        return new Point2D.Double(Iso.worldX(c.x(), c.y()), Iso.worldY(c.x(), c.y()) - 20);
+    private Point2D.Double cellPoint(Cell c) {
+        return new Point2D.Double(scene.projection().x(c.x(), c.y()), scene.projection().y(c.x(), c.y()) - 20);
     }
 
     private void burst(Cell cell, String sprite, double from, double to, double seconds, double delaySeconds) {

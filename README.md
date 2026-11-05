@@ -213,8 +213,13 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   plateau reconstruite (falaises prolongées puis fondues dans la brume), ciel animé (GIF) placé derrière
   les montagnes, rochers, cactus, buissons et fleurs détourés. Une illustration JPEG peut avoir sa
   transparence dans un masque `<nom>.alpha.png`, et un ciel animé (`sky`, `skyFrames`, `skyBottom` dans le
-  fichier `.properties`). Pour une nouvelle carte illustrée : ajouter l'image, l'importer de la même façon
-  et indiquer son nom dans `MapTheme`.
+  fichier `.properties`). Pour une nouvelle carte illustrée : ajouter l'image, relever les 4 coins du
+  plateau peint (fond, droite, avant, gauche), l'importer de la même façon et indiquer son nom dans
+  `MapTheme`.
+- **Perspective des cartes illustrées** : la grille n'y est pas un losange régulier mais une perspective
+  (homographie, `view/Projection`) calée sur les coins du plateau peint (`grid.top`, `grid.right`,
+  `grid.bottom`, `grid.left` dans le `.properties`). Elle épouse ainsi les bords de l'illustration ; les
+  personnages et le décor sont un peu réduits au fond. Les cartes en tuiles gardent l'isométrie régulière.
 - **Ambiances sonores** : `tools/ambience.py` les synthétise (bruit filtré et oscillateurs, boucles de
   16 s sans couture). Aucun fichier extérieur ; modifiez le script pour changer le caractère d'une carte.
 
