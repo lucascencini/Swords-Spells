@@ -227,6 +227,8 @@ public final class Battle implements SpellContext {
             if (f.isAlive()) {
                 Status poison = f.status(StatusKind.POISON);
                 if (poison != null) dealDamage(poison.source(), f, poison.value(), CastStyle.POISON_TICK);
+                Status bees = f.status(StatusKind.BEES);
+                if (bees != null && f.isAlive()) dealDamage(bees.source(), f, bees.value(), CastStyle.BEES_TICK);
             }
             if (isOver()) break;
             if (!f.isAlive()) {

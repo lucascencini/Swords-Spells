@@ -34,7 +34,8 @@ public final class SetupScreen implements Screen {
     /** Paramètres choisis ({@code theme} nul = carte au hasard ; {@code difficulty} nulle = deux joueurs). */
     public record Result(Difficulty difficulty, List<FighterClass> red, List<FighterClass> blue, MapTheme theme) { }
 
-    private static final String[] ROLES = {"Corps à corps et contrôle", "Distance, soin et mobilité", "Longue portée et pièges"};
+    private static final String[] ROLES = {"Corps à corps et contrôle", "Distance, soin et mobilité", "Longue portée et pièges",
+            "Soutien et contrôle de zone"};
     private static final int SLOT_W = 104;
     private static final int SLOT_H = 128;
 

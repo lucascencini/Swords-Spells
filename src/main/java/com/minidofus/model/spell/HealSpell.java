@@ -15,7 +15,11 @@ public final class HealSpell extends AbstractSpell {
     private final IntRange amount;
 
     public HealSpell(Base base, IntRange amount) {
-        super(base, TargetMode.ALLY, CastStyle.HEAL);
+        this(base, amount, CastStyle.HEAL);
+    }
+
+    public HealSpell(Base base, IntRange amount, CastStyle style) {
+        super(base, TargetMode.ALLY, style);
         this.amount = amount;
     }
 

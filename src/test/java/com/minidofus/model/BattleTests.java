@@ -60,6 +60,7 @@ public final class BattleTests {
         shield();
         initiative();
         teamVictory();
+        druid();
         simulation();
     }
 
@@ -329,6 +330,57 @@ public final class BattleTests {
         b.endTurn();
         Check.equal(82, w.hp(), "plus de dégâts après 3 tours");
         Check.equal(18, m.stats().damageDealt(), "dégâts de poison attribués au lanceur");
+    }
+
+    private static void druid() {
+        Check.suite("Druide");
+        // corbeau : ligne de vue nécessaire ; éclair : tombe du ciel, pas besoin de ligne de vue
+        Setup s = new Setup();
+        Fighter d = s.add(FighterCatalog.DRUID, Team.RED, 2, 5);
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 5);
+        s.board.setObstacle(4, 5, true);
+        Battle b = s.start(3);
+        Check.that(!b.canCast(spell(d, "crow"), w.position()), "corbeau bloqué par un rocher (ligne de vue)");
+        Check.that(b.cast(spell(d, "lightning"), w.position()), "éclair lancé par-dessus le rocher");
+        Check.inRange(100 - w.hp(), 18, 24, "éclair : 18-24 dégâts");
+
+        // nuée d'abeilles : 6 dégâts au début de 3 tours de la cible, cumulable avec le poison
+        Setup s2 = new Setup();
+        Fighter d2 = s2.add(FighterCatalog.DRUID, Team.RED, 2, 5);
+        Fighter m2 = s2.add(FighterCatalog.MAGE, Team.RED, 2, 7);
+        Fighter w2 = s2.add(FighterCatalog.WARRIOR, Team.BLUE, 5, 5);
+        Battle b2 = s2.start(4);
+        Check.that(b2.cast(spell(d2, "bees"), w2.position()), "nuée lancée");
+        b2.endTurn();
+        Check.that(b2.cast(spell(m2, "poison"), w2.position()), "poison par-dessus la nuée");
+        b2.endTurn();
+        Check.equal(100 - 6 - 6, w2.hp(), "nuée et poison piquent tous les deux");
+        Check.that(w2.status(StatusKind.BEES) != null && w2.status(StatusKind.POISON) != null, "deux statuts distincts");
+
+        // tornade 3×3 : dégâts puis éjection hors de la zone (le centre est chassé à l'opposé du lanceur)
+        Setup s3 = new Setup();
+        Fighter d3 = s3.add(FighterCatalog.DRUID, Team.RED, 2, 7);
+        Fighter c3 = s3.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 7);
+        Fighter e3 = s3.add(FighterCatalog.MAGE, Team.BLUE, 7, 7);
+        Fighter n3 = s3.add(FighterCatalog.ARCHER, Team.BLUE, 6, 6);
+        Battle b3 = s3.start(6);
+        Check.that(b3.cast(spell(d3, "tornado"), c3.position()), "tornade lancée");
+        Check.equal(new Cell(8, 7), e3.position(), "voisin de droite éjecté vers la droite");
+        Check.equal(new Cell(6, 5), n3.position(), "voisin du haut éjecté vers le haut");
+        Check.equal(new Cell(7, 7), c3.position(), "centre chassé à l'opposé du lanceur, dans la case libérée");
+        Check.that(c3.hp() < 100 && e3.hp() < 60 && n3.hp() < 75, "tous touchés");
+        Check.equal(80, d3.hp(), "le lanceur hors de la zone n'est pas touché");
+
+        // aqua vita : soigne le lanceur ou un allié proche, pas un ennemi
+        Setup s4 = new Setup();
+        Fighter d4 = s4.add(FighterCatalog.DRUID, Team.RED, 2, 5);
+        Fighter a4 = s4.add(FighterCatalog.ARCHER, Team.RED, 4, 5);
+        Fighter w4 = s4.add(FighterCatalog.WARRIOR, Team.BLUE, 3, 6);
+        Battle b4 = s4.start(8);
+        a4.takeDamage(30);
+        Check.that(!b4.canCast(spell(d4, "aquavita"), w4.position()), "pas de soin sur un ennemi");
+        Check.that(b4.cast(spell(d4, "aquavita"), a4.position()), "aqua vita sur l'Archère");
+        Check.inRange(a4.hp() - 45, 14, 20, "soin de 14 à 20 PV");
     }
 
     private static void traps() {

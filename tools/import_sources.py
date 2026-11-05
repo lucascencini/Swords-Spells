@@ -198,9 +198,17 @@ SHEET_POSES = {
         "ne_walk_2": (1308, 390, 1367, 500), "ne_walk_3": (1052, 386, 1127, 500),
     },
 }
+DRUID_POSES = {
+    "se_idle": (24, 390, 98, 501), "se_walk_1": (109, 390, 182, 498),
+    "se_walk_2": (189, 389, 265, 500), "se_walk_3": (881, 390, 952, 499),
+    "ne_idle": (1584, 388, 1648, 500), "ne_walk_1": (1059, 384, 1136, 498),
+    "ne_walk_2": (1228, 388, 1294, 499), "ne_walk_3": (1306, 390, 1370, 500),
+}
+ARMOURED = {"warrior", "mage"}     # gris dans le dessin (casque, manches) : pas de retrait des gris enfermés
+PORTRAIT_SKIP = {"druid": 0.08}    # haut de la silhouette à sauter pour le portrait (bois du Druide)
 SHEET_UPSCALE = 2            # la planche est petite : agrandie une fois ici plutôt qu'à chaque image
 PORTRAIT_COLORS = {"archer": ((70, 112, 58), (22, 44, 24)), "warrior": ((128, 58, 44), (46, 18, 14)),
-                   "mage": ((58, 84, 150), (18, 26, 58))}
+                   "mage": ((58, 84, 150), (18, 26, 58)), "druid": ((112, 96, 52), (40, 34, 16))}
 
 
 def place_poses(poses: dict, out: Path, prefix: str):
@@ -220,27 +228,33 @@ def place_poses(poses: dict, out: Path, prefix: str):
 
 
 def build_sheet_classes(dst: Path):
-    sheet = np.array(Image.open(SOURCE / "warrior_mage_sheet.png").convert("RGB"))
+    build_sheet(dst, "warrior_mage_sheet.png", SHEET_POSES)
+    build_sheet(dst, "druid_sheet.jpg", {"druid": DRUID_POSES})
+
+
+def build_sheet(dst: Path, source: str, poses_by_class: dict):
+    sheet = np.array(Image.open(SOURCE / source).convert("RGB"))
     rgb = sheet.astype(int)
     greyish = ((rgb.max(2) - rgb.min(2)) < 16) & (rgb.max(2) > 100)       # fond et ombres au sol
     lab, _ = ndimage.label(greyish)
     border = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
     fg = ~np.isin(lab, list(border))
-    for cls, table in SHEET_POSES.items():
+    for cls, table in poses_by_class.items():
         poses = {}
         for name, (x0, y0, x1, y1) in table.items():
-            img = cut_pose(sheet, fg, (y0, x0, y1, x1), enclosed_grey=False)
+            img = cut_pose(sheet, fg, (y0, x0, y1, x1), enclosed_grey=cls not in ARMOURED)
             img = img.crop(img.getchannel("A").getbbox())
             poses[name] = img.resize((img.width * SHEET_UPSCALE, img.height * SHEET_UPSCALE), Image.LANCZOS)
         w, h = place_poses(poses, dst / "characters", cls)
         figure = max(p.height for p in poses.values())
         for old in (dst / "characters").glob(f"{cls}_[0-9].png"):
             old.unlink()  # anciennes poses fixes du pack
-        build_archer_portrait(poses["se_idle"], dst / "ui" / f"portrait_{cls}.png", PORTRAIT_COLORS[cls])
+        build_archer_portrait(poses["se_idle"], dst / "ui" / f"portrait_{cls}.png", PORTRAIT_COLORS[cls],
+                              PORTRAIT_SKIP.get(cls, 0))
         print(f"{cls} : {len(poses)} poses ({w}×{h}), échelle conseillée {69 / figure:.3f}")
 
 
-def build_archer_portrait(pose: Image.Image, path: Path, colors=None):
+def build_archer_portrait(pose: Image.Image, path: Path, colors=None, skip=0.0):
     """Portrait dans le style des autres (cadre octogonal bronze, fond coloré, tête en gros plan)."""
     W, H = 76, 83
     S = 4
@@ -268,7 +282,7 @@ def build_archer_portrait(pose: Image.Image, path: Path, colors=None):
     big.paste(bg, (0, 0), mask)
     # tête et épaules, centrées sur le visage
     a = np.array(pose.getchannel("A")) > 128
-    top = int(np.nonzero(a.any(1))[0].min())
+    top = int(np.nonzero(a.any(1))[0].min()) + int(pose.height * skip)
     head_rows = a[top: top + int(pose.height * 0.22)]
     hx = np.nonzero(head_rows.any(0))[0]
     head_cx = (hx.min() + hx.max()) / 2
@@ -676,12 +690,98 @@ def build_foreground(dst: Path):
     print("premier plan : forêt (feuillage), désert (rochers, plantes, poussière)")
 
 
+# ---------------------------------------------------------------------------- effets du Druide
+
+FX_CROW = [(14, 151, 65, 184), (111, 139, 162, 172), (194, 132, 251, 170), (675, 141, 722, 175)]
+FX_BEES = [(120, 3, 132, 14), (131, 14, 141, 24)]
+FX_TORNADO_SPIN = [(6, 2, 80, 100), (103, 2, 170, 97), (191, 6, 264, 94), (286, 5, 348, 92),
+                   (14, 117, 81, 200), (103, 109, 174, 203), (191, 114, 263, 203), (285, 111, 352, 202)]
+FX_TORNADO_END = [(375, 10, 438, 91), (388, 120, 443, 200)]
+FX_LIGHTNING = [(4, 112, 55, 206), (93, 2, 147, 207), (182, 2, 237, 207)]
+FX_POTION = [(42, 88, 178, 263), (225, 88, 360, 264), (409, 87, 544, 264), (600, 88, 740, 261), (815, 88, 955, 248),
+             (1041, 87, 1175, 261), (1202, 87, 1336, 260), (1366, 88, 1499, 262), (1528, 87, 1661, 262),
+             (1709, 87, 1842, 263), (1888, 88, 2022, 262), (43, 275, 176, 448), (228, 275, 360, 447),
+             (409, 275, 542, 448), (613, 275, 745, 446), (825, 275, 957, 446), (1024, 275, 1157, 448),
+             (1289, 274, 1434, 441), (1518, 275, 1650, 448), (1705, 275, 1838, 448), (1891, 275, 2022, 446)]
+
+
+def cut_fx(rgb: np.ndarray, box, pad: int = 4) -> Image.Image:
+    """Élément d'effet sur fond gris : fond (et ombre au sol) reliés au bord du cadre retirés, bords adoucis."""
+    x0, y0, x1, y1 = box
+    h, w = rgb.shape[:2]
+    x0, y0, x1, y1 = max(0, x0 - pad), max(0, y0 - pad), min(w, x1 + pad), min(h, y1 + pad)
+    c = rgb[y0:y1, x0:x1].astype(int)
+    grey = ((c.max(2) - c.min(2)) < 18) & (c.max(2) > 85)
+    lab, _ = ndimage.label(grey)
+    border = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
+    mask = ~np.isin(lab, list(border))
+    parts, n = ndimage.label(mask)
+    if n > 1:
+        sizes = ndimage.sum(mask, parts, range(1, n + 1))
+        mask = np.isin(parts, [i + 1 for i in range(n) if sizes[i] >= 6])
+    alpha = ndimage.gaussian_filter(ndimage.binary_erosion(mask, iterations=1).astype(np.float32) * 0.8
+                                    + mask.astype(np.float32) * 0.2, 0.5)
+    img = Image.fromarray(np.dstack([c.astype(np.uint8), (np.clip(alpha, 0, 1) * 255).astype(np.uint8)]), "RGBA")
+    bbox = img.getchannel("A").getbbox()
+    return img.crop(bbox) if bbox else img
+
+
+def cut_glow(rgb: np.ndarray, box, pad: int = 4) -> Image.Image:
+    """Éclair : seul le trait lumineux est gardé (opacité selon la luminosité), la dalle sombre est ignorée."""
+    x0, y0, x1, y1 = box
+    c = rgb[max(0, y0 - pad):y1 + pad, max(0, x0 - pad):x1 + pad].astype(np.float32)
+    lum = c @ np.array([0.3, 0.55, 0.15], np.float32)
+    bg = np.median(lum[:6])
+    alpha = np.clip((lum - bg - 14) / 70, 0, 1)
+    rgb_out = np.clip(c * 0.7 + np.array([255, 232, 140], np.float32) * 0.3, 0, 255)   # éclat jaune
+    img = Image.fromarray(np.dstack([rgb_out, alpha * 255]).astype(np.uint8), "RGBA")
+    return img.crop(img.getchannel("A").getbbox())
+
+
+def save_frames(frames, out: Path, prefix: str, anchor: str, height=None):
+    """Images d'une animation sur un canevas commun (ancre : « bottom » = posées au sol, « center »)."""
+    if height:
+        frames = [f.resize((max(1, round(f.width * height / max(g.height for g in frames))),
+                            max(1, round(f.height * height / max(g.height for g in frames)))), Image.LANCZOS)
+                  for f in frames]
+    w = max(f.width for f in frames)
+    h = max(f.height for f in frames)
+    for i, f in enumerate(frames, 1):
+        c = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        y = h - f.height if anchor == "bottom" else (h - f.height) // 2
+        c.alpha_composite(f, ((w - f.width) // 2, y))
+        c.save(out / f"{prefix}_{i}.png", optimize=True)
+    return w, h
+
+
+def build_druid_fx(dst: Path):
+    out = dst / "fx"
+    out.mkdir(parents=True, exist_ok=True)
+    load = lambda n: np.array(Image.open(SOURCE / n).convert("RGB"))
+    crow = load("fx_crow.png")
+    save_frames([cut_fx(crow, b) for b in FX_CROW], out, "crow", "center")
+    bees = load("fx_bees.png")
+    for i, b in enumerate(FX_BEES, 1):
+        bee = cut_fx(bees, b, pad=2)
+        bee.resize((bee.width * 2, bee.height * 2), Image.LANCZOS).save(out / f"bee_{i}.png", optimize=True)
+    tornado = load("fx_tornado.png")
+    spin = [cut_fx(tornado, b) for b in FX_TORNADO_SPIN]
+    end = [cut_fx(tornado, b) for b in FX_TORNADO_END]
+    save_frames(spin + end, out, "tornado", "bottom")
+    lightning = load("fx_lightning.png")
+    save_frames([cut_glow(lightning, b) for b in FX_LIGHTNING], out, "lightning", "bottom")
+    potion = load("fx_potion.jpg")
+    save_frames([cut_fx(potion, b) for b in FX_POTION], out, "potion", "center", height=96)
+    print(f"effets du Druide : corbeau 4, abeilles 2, tornade {len(spin) + len(end)}, éclair 3, potion {len(FX_POTION)}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dst", required=True, type=Path)
     args = ap.parse_args()
     build_archer(args.dst)
     build_sheet_classes(args.dst)
+    build_druid_fx(args.dst)
     build_forest(args.dst)
     build_desert(args.dst)
     build_foreground(args.dst)

@@ -1,6 +1,6 @@
 # Swords & Spells — combat tactique isométrique
 
-Combat au tour par tour en équipes de 1 à 3 (Guerrier, Mage, Archère), sur une arène isométrique
+Combat au tour par tour en équipes de 1 à 3 (Guerrier, Mage, Archère, Druide), sur une arène isométrique
 générée aléatoirement, à deux joueurs sur le même PC ou contre l'ordinateur (3 niveaux).
 Application de bureau en **Java 17+ (Swing / Java2D)**, sans aucune dépendance externe : le JDK
 fournit le rendu, le son, et même la création d'un exécutable autonome.
@@ -33,7 +33,7 @@ Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur », «
 
 | Option | Effet |
 |---|---|
-| `--red warrior,archer` · `--blue mage,mage,warrior` | composition des équipes (1 à 3 parmi `warrior`, `mage`, `archer`) |
+| `--red warrior,archer` · `--blue mage,mage,warrior` | composition des équipes (1 à 3 parmi `warrior`, `mage`, `archer`, `druid`) |
 | `--ai easy\|normal\|hard` · `--ai-red …` | l'ordinateur joue l'équipe bleue (ou rouge) |
 | `--map forest\|ruins\|lake\|snow\|desert\|dungeon` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
 
@@ -91,6 +91,7 @@ le bandeau de tour montre cet ordre.
 | **Guerrier** (contrôle, corps à corps) | 100 / 6 / 3 | Frappe assommante (silence) · Coup de charge · Bouclier · Repousser · Grappin |
 | **Mage** (distance, mobilité) | 60 / 7 / 4 | Trait arcanique · Boule de feu (croix) · Soin (allié) · Téléportation · Poison |
 | **Archère** (longue portée, terrain) | 75 / 6 / 3 | Tir précis · Flèche de recul · Piège · Pluie de flèches (3×3) · Bond |
+| **Druide** (soutien, contrôle de zone) | 80 / 6 / 3 | Lancer de corbeau · Nuée d'abeilles (6 dégâts sur 3 tours) · Tornade (3×3, éjecte hors de la zone) · Éclair (sans ligne de vue) · Aqua vita (soin) |
 
 Les valeurs exactes (dégâts, portées, relances) sont dans l'info-bulle de chaque sort et dans
 `model/catalog/FighterCatalog.java`.
@@ -216,6 +217,8 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   fichier `.properties`). Pour une nouvelle carte illustrée : ajouter l'image, relever les 4 coins du
   plateau peint (fond, droite, avant, gauche), l'importer de la même façon et indiquer son nom dans
   `MapTheme`.
+- **Druide** : poses tirées de `tools/source/druid_sheet.jpg`, effets de ses sorts des planches `fx_*`
+  (corbeau, abeilles, tornade, éclair, potion), bruitages synthétisés par `tools/druid_sounds.py`.
 - **Personnages** : Guerrier et Mage viennent de `tools/source/warrior_mage_sheet.png`, l'Archère de
   `archer_sheet.png` (poses de repos et de marche vers le sud-est et le nord-est, miroirs pour les deux
   autres directions ; choix des vignettes dans `SHEET_POSES` / `ARCHER_POSES`, réglages dans

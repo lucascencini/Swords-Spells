@@ -67,7 +67,9 @@ public final class TitleScreen implements Screen {
         g.fillRect(width / 2 - 120, titleY + 60, 240, 2);
 
         for (MenuButton b : buttons) b.draw(g, mouseX, mouseY);
-        UiTheme.drawOutlinedCentered(g, "Guerrier · Mage · Archère  —  équipes de 1 à 3  —  6 cartes",
+        UiTheme.drawOutlinedCentered(g, com.minidofus.model.catalog.FighterCatalog.ALL.stream().map(c -> c.displayName())
+                        .collect(java.util.stream.Collectors.joining(" · ")) + "  —  équipes de 1 à 3  —  "
+                        + com.minidofus.model.map.MapTheme.values().length + " cartes",
                 UiTheme.BODY.deriveFont(12.5f), width / 2.0, height - 24, new Color(255, 255, 255, 190), new Color(0, 0, 0, 160));
     }
 

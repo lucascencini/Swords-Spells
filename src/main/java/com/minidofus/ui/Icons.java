@@ -61,8 +61,35 @@ public final class Icons {
             case TRAP -> framed(new Color(0xA88A62), new Color(0x4E3A22), Icons::trap);
             case ARROW_RAIN -> framed(new Color(0xE0B94A), new Color(0x7A5A10), Icons::rain);
             case LEAP -> framed(new Color(0x9CC8A0), new Color(0x2E5A36), Icons::leap);
-            case COLLISION, TRAP_TRIGGER, POISON_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
+            case CROW -> pictured(new Color(0x8E86B8), new Color(0x2E2848), "fx/crow_2", 30);
+            case BEES -> framed(new Color(0xF0C850), new Color(0x7A5410), (g, x, y) -> {
+                for (int i = 0; i < 5; i++) {
+                    double a = i * 1.26;
+                    picture(g, assets.image("fx/bee_" + (1 + i % 2)), x + Math.cos(a) * 11, y + Math.sin(a) * 10, 12);
+                }
+            });
+            case TORNADO -> pictured(new Color(0xA8D890), new Color(0x2E5A24), "fx/tornado_3", 40);
+            case LIGHTNING -> pictured(new Color(0x8A86C8), new Color(0x262850), "fx/lightning_3", 44);
+            case AQUA_VITA -> pictured(new Color(0x5ED8C0), new Color(0x145A50), "fx/potion_1", 36);
+            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
         };
+    }
+
+    /** Icône dont le glyphe est une image (effets du Druide). */
+    private BufferedImage pictured(Color light, Color dark, String image, double height) {
+        BufferedImage pic = assets.image(image);
+        return framed(light, dark, (g, x, y) -> picture(g, pic, x, y, height));
+    }
+
+    private static void picture(Graphics2D g, BufferedImage pic, double cx, double cy, double height) {
+        double h = height;
+        double w = h * pic.getWidth() / pic.getHeight();
+        if (w > 42) {
+            w = 42;
+            h = w * pic.getHeight() / pic.getWidth();
+        }
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(pic, (int) Math.round(cx - w / 2), (int) Math.round(cy - h / 2), (int) Math.round(w), (int) Math.round(h), null);
     }
 
     private interface Glyph {

@@ -196,6 +196,7 @@ public final class FighterView {
         double y = -h * 0.94 - hop + dirY * lungeOffset * 0.5;
 
         if (castGlow > 0 && shownHp > 0) drawCastAura(g, feet, cast);
+        drawBees(g, assets, feet, false);
 
         AffineTransform saved = g.getTransform();
         Composite savedComposite = g.getComposite();
@@ -217,6 +218,7 @@ public final class FighterView {
             overlay(g, assets, img, UiTheme.POISON, 0.12 + 0.1 * Math.sin(clock * 3), x, y, w, h);
         }
         g.setTransform(saved);
+        drawBees(g, assets, feet, true);
         if (isShielded() && shownHp > 0) drawShieldBubble(g, feet);
         g.setComposite(savedComposite);
         if (shownHp > 0 && fade > 0.5) drawStatusBadges(g, feet.x, feet.y + y - 6);
@@ -298,9 +300,26 @@ public final class FighterView {
         g.fill(new Ellipse2D.Double(cx - 26, cy - r, 52, r * 2));
     }
 
+    /** Nuée d'abeilles en orbite autour du combattant (la moitié arrière est dessinée derrière lui). */
+    private void drawBees(Graphics2D g, Assets assets, Point2D.Double feet, boolean front) {
+        if (!shows(StatusKind.BEES) || shownHp <= 0 || deathProgress > 0) return;
+        for (int i = 0; i < 8; i++) {
+            double a = clock * (2.0 + (i % 3) * 0.45) + i * 0.8;
+            if ((Math.sin(a) > 0) != front) continue;
+            double bx = feet.x + Math.cos(a) * (19 + (i % 2) * 5);
+            double by = feet.y - 36 - (i % 3) * 7 + Math.sin(a) * 7 + Math.sin(clock * 7 + i) * 3;
+            BufferedImage img = assets.image("fx/bee_" + (1 + i % 2));
+            double s = 0.5 + 0.08 * Math.sin(clock * 45 + i);
+            int w = (int) Math.round(img.getWidth() * s);
+            int h = (int) Math.round(img.getHeight() * s);
+            g.drawImage(img, (int) Math.round(bx - w / 2.0), (int) Math.round(by - h / 2.0), w, h, null);
+        }
+    }
+
     /** Petites pastilles au-dessus de la tête : poison (goutte verte), silence (bulle barrée). */
     private void drawStatusBadges(Graphics2D g, double cx, double top) {
-        int count = (shows(StatusKind.POISON) ? 1 : 0) + (shows(StatusKind.SILENCE) ? 1 : 0);
+        int count = (shows(StatusKind.POISON) ? 1 : 0) + (shows(StatusKind.SILENCE) ? 1 : 0)
+                + (shows(StatusKind.BEES) ? 1 : 0);
         if (count == 0) return;
         double x = cx - (count - 1) * 8;
         if (shows(StatusKind.POISON)) {
@@ -311,6 +330,14 @@ public final class FighterView {
             drop.curveTo(x - 3, top + 4, x - 4, top + 1, x, top - 4);
             g.setColor(Color.WHITE);
             g.fill(drop);
+            x += 16;
+        }
+        if (shows(StatusKind.BEES)) {
+            badge(g, x, top, UiTheme.BEES);
+            g.setColor(new Color(40, 30, 10));
+            g.fill(new Ellipse2D.Double(x - 3, top - 2, 6, 5));
+            g.setColor(UiTheme.BEES);
+            g.drawLine((int) x - 2, (int) top, (int) x + 2, (int) top);
             x += 16;
         }
         if (shows(StatusKind.SILENCE)) {

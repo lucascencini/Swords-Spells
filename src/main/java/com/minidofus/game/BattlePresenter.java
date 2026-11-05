@@ -18,6 +18,9 @@ import com.minidofus.view.anim.Animation;
 import com.minidofus.view.anim.AnimationQueue;
 import com.minidofus.view.fx.Arrow;
 import com.minidofus.view.fx.Burst;
+import com.minidofus.view.fx.BeeSwarm;
+import com.minidofus.view.fx.FlyingFrames;
+import com.minidofus.view.fx.FrameEffect;
 import com.minidofus.view.fx.FloatingText;
 import com.minidofus.view.fx.Projectile;
 import com.minidofus.view.fx.RingPulse;
@@ -232,8 +235,16 @@ final class BattlePresenter implements Consumer<BattleEvent> {
                 Point2D.Double p = cellPoint(target);
                 scene.effects().add(new RingPulse(p.x, p.y + 16, UiTheme.HEAL, 0.6));
             }), delay(0.15));
+            case CROW -> sequence(face, call(() -> Sfx.CROW.play(sound)), crow(caster, target), call(() -> {
+                Point2D.Double p = cellPoint(target);
+                scene.effects().add(new RingPulse(p.x, p.y + 16, new Color(0x4A4060), 0.35));
+            }));
+            case BEES -> sequence(face, call(() -> Sfx.BEES.play(sound)), beeSwarm(caster, target));
+            case TORNADO -> sequence(face, tornado(target));
+            case LIGHTNING -> sequence(face, delay(0.08), lightning(target));
+            case AQUA_VITA -> sequence(face, aquaVita(target));
             case TELEPORT, LEAP -> face;
-            case COLLISION, TRAP_TRIGGER, POISON_TICK -> call(() -> { });
+            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK -> call(() -> { });
         };
     }
 
@@ -246,6 +257,11 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             case POISON -> UiTheme.POISON;
             case SHIELD -> UiTheme.SHIELD;
             case ARROW_RAIN, TRAP -> UiTheme.GOLD_LIGHT;
+            case CROW -> new Color(0x9A8CC8);
+            case BEES -> UiTheme.BEES;
+            case TORNADO -> new Color(0x9BD48A);
+            case LIGHTNING -> new Color(0xFFE680);
+            case AQUA_VITA -> new Color(0x3FD0B0);
             default -> null;
         };
     }
@@ -268,6 +284,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             v.setShownHp(e.hpAfter());
             Point2D.Double head = v.worldHead();
             Color color = e.style() == CastStyle.POISON_TICK ? UiTheme.POISON
+                    : e.style() == CastStyle.BEES_TICK ? UiTheme.BEES
                     : e.heavy() ? UiTheme.DAMAGE_HEAVY : UiTheme.DAMAGE;
             String text = "-" + e.amount() + (e.style() == CastStyle.COLLISION ? " choc" : "");
             scene.effects().add(new FloatingText(text, head.x, head.y, color, e.heavy() ? 30 : 24));
@@ -292,12 +309,14 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             String text = switch (e.kind()) {
                 case SHIELD -> e.active() ? "Bouclier -50 %" : "Bouclier dissipé";
                 case POISON -> e.active() ? "Empoisonné" : null;
+                case BEES -> e.active() ? "Nuée d'abeilles" : null;
                 case SILENCE -> e.active() ? "Silence !" : null;
                 case SILENCE_IMMUNITY -> null;
             };
             if (text == null) return;
             Color color = switch (e.kind()) {
                 case POISON -> UiTheme.POISON;
+                case BEES -> UiTheme.BEES;
                 case SILENCE -> UiTheme.SILENCE;
                 default -> UiTheme.SHIELD;
             };
@@ -364,6 +383,79 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             scene.effects().add(p);
             return tween(seconds, p::setProgress);
         });
+    }
+
+    // ------------------------------------------------------------------ sorts du Druide
+
+    private List<java.awt.image.BufferedImage> frames(String prefix, int count) {
+        List<java.awt.image.BufferedImage> out = new ArrayList<>(count);
+        for (int i = 1; i <= count; i++) out.add(assets.image("fx/" + prefix + "_" + i));
+        return out;
+    }
+
+    /** Le corbeau s'envole du lanceur et pique sur la cible. */
+    private Animation crow(FighterView caster, Cell target) {
+        return defer(() -> {
+            Point2D.Double from = caster.worldFeet();
+            Point2D.Double to = cellPoint(target);
+            FlyingFrames bird = new FlyingFrames(frames("crow", 4), from.x, from.y - 46, to.x, to.y - 10, 46, 30, 12);
+            scene.effects().add(bird);
+            return tween(0.5, bird::setProgress);
+        });
+    }
+
+    /** La nuée file vers la cible (elle reste ensuite autour d'elle, dessinée par sa vue). */
+    private Animation beeSwarm(FighterView caster, Cell target) {
+        return defer(() -> {
+            Point2D.Double from = caster.worldFeet();
+            Point2D.Double to = cellPoint(target);
+            BeeSwarm swarm = new BeeSwarm(frames("bee", 2), from.x, from.y - 40, to.x, to.y - 14);
+            scene.effects().add(swarm);
+            return tween(0.6, swarm::setProgress);
+        });
+    }
+
+    /** Tornade au centre de la zone : elle tourbillonne, les dégâts tombent pendant qu'elle se dissipe. */
+    private Animation tornado(Cell center) {
+        return sequence(call(() -> {
+            Sfx.WIND.play(sound);
+            Point2D.Double p = cellPoint(center);
+            double ground = p.y + 20;
+            scene.effects().add(new FrameEffect(frames("tornado", 10), p.x, ground + 12, 150, 14, 1.25, true, 0, 8)
+                    .fades(0.15, 0.25));
+            scene.effects().add(new RingPulse(p.x, ground, new Color(0xB8D8A0), 0.7));
+        }), delay(0.85));
+    }
+
+    /** L'éclair grandit en trois images puis frappe : tonnerre et onde au sol. */
+    private Animation lightning(Cell target) {
+        return sequence(call(() -> {
+            Point2D.Double p = cellPoint(target);
+            double ground = p.y + 20;
+            scene.effects().add(new FrameEffect(frames("lightning", 3), p.x, ground + 6, 230, 16, 0.5, true, 2, 3)
+                    .fades(0, 0.18));
+        }), delay(0.12), call(() -> {
+            Sfx.THUNDER.play(sound);
+            Point2D.Double p = cellPoint(target);
+            scene.effects().add(new RingPulse(p.x, p.y + 20, new Color(0xFFE680), 0.45));
+            scene.effects().add(new Burst(assets.tinted(assets.image("fx/arcane"), "lightning", new Color(0xFFF2B0)),
+                    p.x, p.y + 10, 0.35, 1.1, 0.3, 0));
+        }), delay(0.12));
+    }
+
+    /** Une aqua vita apparaît au-dessus de la tête de la cible, tourne sur elle-même, puis se déverse en soin. */
+    private Animation aquaVita(Cell target) {
+        return sequence(call(() -> {
+            Sfx.CHIME.play(sound);
+            Point2D.Double p = cellPoint(target);
+            scene.effects().add(new FrameEffect(frames("potion", 21), p.x, p.y - 66, 44, 20, 1.15, false, 0, 21)
+                    .rise(14).fades(0.18, 0.3));
+        }), delay(0.85), call(() -> {
+            Point2D.Double p = cellPoint(target);
+            scene.effects().add(new RingPulse(p.x, p.y + 20, new Color(0x3FD0B0), 0.6));
+            scene.effects().add(new Burst(assets.tinted(assets.image("fx/arcane"), "aquavita", new Color(0x7FF0D0)),
+                    p.x, p.y - 20, 0.3, 0.9, 0.4, 0));
+        }), delay(0.1));
     }
 
     private Animation arrow(FighterView caster, Cell target, double seconds, double arc) {
