@@ -190,7 +190,7 @@ public final class Hud {
             int row = red ? redRow++ : blueRow++;
             int x = red ? 12 : width - 12 - CARD_W;
             boolean active = !m.isOver() && m.active() == v.fighter();
-            drawCard(g, v, x, 12 + row * (CARD_H + CARD_GAP), !red, active, label(m, v.fighter()));
+            drawCard(g, v, x, 12 + row * (CARD_H + CARD_GAP), !red, active, label(m, v.fighter()), m.controllerLabel(v.fighter()));
         }
         drawTurnPanel(g, m);
         drawTimeline(g, m);
@@ -216,7 +216,7 @@ public final class Hud {
         return f.name() + " " + rank;
     }
 
-    private void drawCard(Graphics2D g, FighterView v, int x, int y, boolean mirrored, boolean active, String name) {
+    private void drawCard(Graphics2D g, FighterView v, int x, int y, boolean mirrored, boolean active, String name, String owner) {
         Fighter f = v.fighter();
         boolean dead = v.isShownDead();
         Composite saved = g.getComposite();
@@ -265,9 +265,18 @@ public final class Hud {
         g.drawString("PA " + (active ? f.pa() : f.fighterClass().maxPa()), tx, y + 55);
         g.setColor(active ? UiTheme.PM_COLOR.brighter() : UiTheme.withAlpha(UiTheme.PM_COLOR.brighter(), 150));
         g.drawString("PM " + (active ? f.pm() : f.fighterClass().maxPm()), tx + 44, y + 55);
-        g.setColor(UiTheme.TEXT_DIM);
+        String controller = owner;
         g.setFont(UiTheme.BODY.deriveFont(10.5f));
-        g.drawString("Init. " + f.initiative(), tx + textW - 40, y + 55);
+        if (controller != null) {
+            FontMetrics fm = g.getFontMetrics();
+            String c = controller;
+            while (fm.stringWidth(c) > textW - 88 && c.length() > 3) c = c.substring(0, c.length() - 2) + "…";
+            g.setColor(UiTheme.GOLD_LIGHT);
+            g.drawString(c, tx + textW - fm.stringWidth(c), y + 55);
+        } else {
+            g.setColor(UiTheme.TEXT_DIM);
+            g.drawString("Init. " + f.initiative(), tx + textW - 40, y + 55);
+        }
         g.setComposite(saved);
     }
 
@@ -311,6 +320,14 @@ public final class Hud {
         UiTheme.drawCentered(g, title, UiTheme.TITLE.deriveFont(16f), width / 2.0, 36, color);
         UiTheme.drawCentered(g, "Manche " + m.round() + "  ·  " + m.mapName(), UiTheme.BODY.deriveFont(11f),
                 width / 2.0, 56, UiTheme.TEXT_DIM);
+        int left = m.secondsLeft();
+        if (left >= 0 && !m.isOver()) {
+            String t = left / 60 + ":" + String.format("%02d", left % 60);
+            Color c = left <= 10 ? UiTheme.DAMAGE : UiTheme.PARCHMENT;
+            double pulse = left <= 10 ? 1 + 0.08 * Math.sin(System.nanoTime() / 1e8) : 1;
+            UiTheme.drawOutlinedCentered(g, t, UiTheme.TITLE.deriveFont((float) (17 * pulse)), x + w - 34, 44, c,
+                    new Color(0, 0, 0, 180));
+        }
     }
 
     /** Liseré coloré qui pulse sur les bords de l'écran à chaque changement de tour. */
@@ -400,7 +417,7 @@ public final class Hud {
         if (!m.isHumanTurn()) {
             g.setColor(new Color(12, 9, 6, 200));
             g.fill(new RoundRectangle2D.Double(bar.getCenterX() - 150, bar.getCenterY() - 20, 300, 40, 14, 14));
-            UiTheme.drawOutlinedCentered(g, "L'ordinateur joue…", UiTheme.TITLE.deriveFont(18f),
+            UiTheme.drawOutlinedCentered(g, m.waitingLabel(), UiTheme.TITLE.deriveFont(18f),
                     bar.getCenterX(), bar.getCenterY() + 7, UiTheme.GOLD_LIGHT, new Color(0, 0, 0, 200));
         }
 
@@ -521,7 +538,7 @@ public final class Hud {
         FontMetrics fm = g.getFontMetrics();
         int helpW = 0;
         for (String line : help) helpW = Math.max(helpW, fm.stringWidth(line));
-        if (m.isOver() || helpW + 32 < bar.x) {
+        if (!m.online() && (m.isOver() || helpW + 32 < bar.x)) {
             for (int i = 0; i < help.length; i++) {
                 UiTheme.drawOutlinedLeft(g, help[i], g.getFont(), 16, height - 14 - (help.length - 1 - i) * 15,
                         new Color(255, 255, 255, 200), new Color(0, 0, 0, 120));
@@ -671,12 +688,19 @@ public final class Hud {
             }
         }
         int by = y + h - 58;
-        replayButton = new Rectangle(width / 2 - 250, by, 160, 40);
-        newMapButton = new Rectangle(width / 2 - 80, by, 160, 40);
-        menuButton = new Rectangle(width / 2 + 90, by, 160, 40);
-        drawPlainButton(g, replayButton, "Rejouer (R)", UiTheme.GOLD);
-        drawPlainButton(g, newMapButton, "Nouvelle carte (N)", new Color(0x4A9C5A));
-        drawPlainButton(g, menuButton, "Menu (Échap)", new Color(0x6A5A44));
+        if (m.online()) {
+            replayButton = new Rectangle();
+            newMapButton = new Rectangle();
+            menuButton = new Rectangle(width / 2 - 110, by, 220, 40);
+            drawPlainButton(g, menuButton, "Retour au salon (Échap)", UiTheme.GOLD);
+        } else {
+            replayButton = new Rectangle(width / 2 - 250, by, 160, 40);
+            newMapButton = new Rectangle(width / 2 - 80, by, 160, 40);
+            menuButton = new Rectangle(width / 2 + 90, by, 160, 40);
+            drawPlainButton(g, replayButton, "Rejouer (R)", UiTheme.GOLD);
+            drawPlainButton(g, newMapButton, "Nouvelle carte (N)", new Color(0x4A9C5A));
+            drawPlainButton(g, menuButton, "Menu (Échap)", new Color(0x6A5A44));
+        }
         g.setComposite(saved);
     }
 

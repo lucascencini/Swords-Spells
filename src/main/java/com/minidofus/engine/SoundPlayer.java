@@ -28,6 +28,7 @@ public final class SoundPlayer implements AutoCloseable {
         return t;
     });
     private volatile boolean muted;
+    private volatile boolean suppressed;
     private volatile boolean disabled;
     private volatile String loopName;
     private volatile double loopVolume;
@@ -43,13 +44,22 @@ public final class SoundPlayer implements AutoCloseable {
         });
     }
 
+    /** Coupure temporaire des effets (rattrapage d'un combat en ligne), sans toucher au réglage du joueur. */
+    public void setSuppressed(boolean suppressed) {
+        this.suppressed = suppressed;
+    }
+
+    public boolean isSuppressed() {
+        return suppressed;
+    }
+
     public void play(String name, double volume) {
-        if (muted || disabled) return;
+        if (muted || disabled || suppressed) return;
         scheduler.execute(() -> playNow(name, volume));
     }
 
     public void play(String name, double volume, double delaySeconds) {
-        if (muted || disabled) return;
+        if (muted || disabled || suppressed) return;
         scheduler.schedule(() -> playNow(name, volume), (long) (delaySeconds * 1000), TimeUnit.MILLISECONDS);
     }
 

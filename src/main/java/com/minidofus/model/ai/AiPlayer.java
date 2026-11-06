@@ -64,7 +64,10 @@ public final class AiPlayer {
                 if (!battle.canCast(spell, target)) continue;
                 Battle sim = battle.simulate();
                 sim.cast(spell, target);
-                candidates.add(new Candidate(new AiAction.Cast(spell, target), evaluate(sim, team)));
+                double score = evaluate(sim, team);
+                // un sort qui n'améliore rien (soin d'un allié en pleine santé…) gaspille des PA
+                if (score <= stay + 1e-9) score -= 1.5;
+                candidates.add(new Candidate(new AiAction.Cast(spell, target), score));
             }
         }
 
