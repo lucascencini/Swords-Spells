@@ -73,7 +73,13 @@ public final class Icons {
             case AQUA_VITA -> pictured(new Color(0x5ED8C0), new Color(0x145A50), "fx/potion_1", 36);
             case ICE_ZONE -> pictured(new Color(0x8AC8F0), new Color(0x1E4870), "fx/ice_burst_4", 30);
             case STONE_SHIELD -> pictured(new Color(0xC8B898), new Color(0x4E4232), "fx/stone_1", 40);
-            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK, ICE_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
+            case FROST_BOLT -> pictured(new Color(0x9ED0F0), new Color(0x1E4870), "fx/ice_shard", 20);
+            case ICE_PRISON -> pictured(new Color(0x7FB8E8), new Color(0x183858), "fx/ice_burst_4", 28);
+            case ARCANE_RAY -> pictured(new Color(0x9A8CF0), new Color(0x2A1E70), "fx/ice_grow_3", 34);
+            case OVERLOAD -> framed(new Color(0xC08CF0), new Color(0x4A1E7A), (g, x, y) -> star(g, x, y, 17));
+            case NOVA -> pictured(new Color(0xF0A060), new Color(0x2A3870), "fx/ice_burst_3", 30);
+            case METEOR -> pictured(new Color(0xF08840), new Color(0x6A1E08), "fx/fire_projectile", 40);
+            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK, ICE_TICK, BURN_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
         };
     }
 

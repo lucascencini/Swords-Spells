@@ -46,7 +46,7 @@ public final class FighterCatalog {
             new StoneShieldSpell(Base.of("stoneshield", "Bouclier de pierre", 3, 0, 3).cooldown(3), 2)));
 
     /** Longue portée et contrôle du terrain : tir précis, recul, pièges, pluie de flèches, bond. */
-    public static final FighterClass ARCHER = new FighterClass("archer", "Archère", 75, 6, 3, 12, 5, List.of(
+    public static final FighterClass ARCHER = new FighterClass("archer", "Chasseur", 75, 6, 3, 12, 5, List.of(
             new StrikeSpell(Base.of("aimed", "Tir précis", 3, 2, 7), new IntRange(10, 14), CastStyle.ARROW),
             new StrikeSpell(Base.of("recoil", "Flèche de recul", 3, 1, 4).inLine().cooldown(1), new IntRange(6, 9),
                     CastStyle.RECOIL_ARROW, 2, 0),

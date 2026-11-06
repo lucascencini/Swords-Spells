@@ -33,8 +33,9 @@ public final class IceZoneSpell extends AbstractSpell {
 
     @Override
     public String effectSummary() {
-        return impact + " dégâts en 3×3 (ennemis), puis sol gelé " + turns + " tours : " + damagePerTurn
-                + " dégâts et -" + pmLoss + " PM à qui commence son tour dedans";
+        return impact.scaled(powerMult()) + " dégâts en 3×3 (ennemis), puis sol gelé " + (turns + param("turns"))
+                + " tours : " + (damagePerTurn + param("tick")) + " dégâts et -" + (pmLoss + param("pmloss"))
+                + " PM à qui commence son tour dedans";
     }
 
     @Override
@@ -58,8 +59,8 @@ public final class IceZoneSpell extends AbstractSpell {
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
         for (Cell c : impactCells(ctx, caster, target)) {
             Fighter f = ctx.fighterAt(c);
-            if (f != null && f.isEnemyOf(caster)) ctx.dealDamage(caster, f, ctx.roll(impact), style());
+            if (f != null && f.isEnemyOf(caster)) hit(ctx, caster, f, impact);
         }
-        ctx.placeIceZone(caster, target, turns, damagePerTurn, pmLoss);
+        ctx.placeIceZone(caster, target, turns + param("turns"), damagePerTurn + param("tick"), pmLoss + param("pmloss"));
     }
 }

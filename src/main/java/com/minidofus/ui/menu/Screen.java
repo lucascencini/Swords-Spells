@@ -15,6 +15,10 @@ public interface Screen {
 
     void mousePressed(int x, int y);
 
+    /** Clic droit (retirer un point de talent…). */
+    default void mouseRightPressed(int x, int y) {
+    }
+
     /** Touche validée : « ENTER », « ESCAPE », « LEFT », « RIGHT », « TAB », « BACK_SPACE »… */
     void key(String key);
 

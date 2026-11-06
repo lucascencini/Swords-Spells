@@ -16,9 +16,26 @@ public final class FighterClass {
     private final int initiative;
     private final int preferredRange;
     private final List<Spell> spells;
+    private final String className;
+    private final int level;
+    private final double power;
+    private final double resist;
 
     public FighterClass(String id, String displayName, int maxHp, int maxPa, int maxPm, int initiative,
                         int preferredRange, List<Spell> spells) {
+        this(id, displayName, displayName, 1, maxHp, maxPa, maxPm, initiative, preferredRange, spells, 1, 0);
+    }
+
+    /**
+     * Combattant issu d'un personnage : nom propre, niveau, puissance (multiplie dégâts et soins infligés) et
+     * résistance (fraction des dégâts reçus annulée).
+     */
+    public FighterClass(String id, String displayName, String className, int level, int maxHp, int maxPa, int maxPm,
+                        int initiative, int preferredRange, List<Spell> spells, double power, double resist) {
+        this.className = className;
+        this.level = level;
+        this.power = power;
+        this.resist = resist;
         this.id = id;
         this.displayName = displayName;
         this.maxHp = maxHp;
@@ -37,4 +54,9 @@ public final class FighterClass {
     public int initiative() { return initiative; }
     public int preferredRange() { return preferredRange; }
     public List<Spell> spells() { return spells; }
+    /** Nom de la classe (« Mage »), quand {@link #displayName} est celui d'un personnage. */
+    public String className() { return className; }
+    public int level() { return level; }
+    public double power() { return power; }
+    public double resist() { return resist; }
 }

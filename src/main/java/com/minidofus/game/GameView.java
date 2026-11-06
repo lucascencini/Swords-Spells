@@ -112,7 +112,7 @@ public final class GameView extends JComponent {
                 new MenuButton("Reprendre", "La partie continue pendant la pause", true, () -> paused = false),
                 new MenuButton("Quitter la partie", "L'ordinateur jouera vos personnages", false, () -> {
                     paused = false;
-                    if (online != null) online.exit();
+                    if (online != null) online.quitMatch();
                 }));
         if (setup != null) newSession(setup);
         else openTitle();
@@ -230,6 +230,7 @@ public final class GameView extends JComponent {
             fitCameras();
         } else if (s == null && session != null && menu != null) {
             session = null;
+            if (demo == null) startDemo(); // fond animé des menus (personnages, salon)
         }
     }
 
@@ -256,8 +257,8 @@ public final class GameView extends JComponent {
     /** Partie de démonstration, ordinateur contre ordinateur, en fond des menus. */
     private void startDemo() {
         List<FighterClass> all = FighterCatalog.ALL;
-        List<FighterClass> red = List.of(all.get(random.nextInt(3)), all.get(random.nextInt(3)));
-        List<FighterClass> blue = List.of(all.get(random.nextInt(3)), all.get(random.nextInt(3)));
+        List<FighterClass> red = List.of(all.get(random.nextInt(all.size())), all.get(random.nextInt(all.size())));
+        List<FighterClass> blue = List.of(all.get(random.nextInt(all.size())), all.get(random.nextInt(all.size())));
         MapTheme theme = randomTheme();
         demo = new GameSession(new MatchSetup(theme, randomSeed(random), red, blue, Difficulty.NORMAL, Difficulty.NORMAL),
                 assets, poses, silent, demoHud, p -> demoCamera.focus(p.x, p.y, 60, 60));
@@ -324,6 +325,8 @@ public final class GameView extends JComponent {
         double dt = Math.min(0.05, (now - lastFrame) / 1e9); // pas de saut énorme après une pause
         lastFrame = now;
         advance(dt);
+        // la barre de sorts suit le combattant actif (de 1 à 9 sorts selon la classe et le grimoire)
+        if (session != null && hud.spellSlots() != session.spellCount()) hud.layout(getWidth(), getHeight(), session.spellCount());
         if (showFps) {
             fpsAccumulator += dt;
             fpsFrames++;
@@ -401,6 +404,7 @@ public final class GameView extends JComponent {
                 requestFocusInWindow();
                 if (menu != null) {
                     if (SwingUtilities.isLeftMouseButton(e)) menu.mousePressed(e.getX(), e.getY());
+                    else if (SwingUtilities.isRightMouseButton(e)) menu.mouseRightPressed(e.getX(), e.getY());
                     return;
                 }
                 if (paused) {
@@ -524,7 +528,7 @@ public final class GameView extends JComponent {
         });
         battleKey("SPACE", () -> session.endTurn());
         battleKey("D", () -> session.selectMove());
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= 9; i++) {
             int index = i - 1;
             battleKey(String.valueOf(i), () -> session.selectSpell(index));
             battleKey("NUMPAD" + i, () -> session.selectSpell(index));

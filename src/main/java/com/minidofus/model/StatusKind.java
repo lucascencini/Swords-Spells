@@ -12,6 +12,14 @@ public enum StatusKind {
     POISON("Poison", false),
     /** Nuée d'abeilles : inflige {@code value} dégâts au début de chaque tour du porteur (cumulable avec le poison). */
     BEES("Nuée d'abeilles", false),
+    /** Brûlure : inflige {@code value} dégâts au début de chaque tour du porteur (cumulable avec le poison). */
+    BURN("Brûlure", false),
+    /** Ralenti : perd {@code value} PM au début de son prochain tour. */
+    CHILL("Ralenti", true),
+    /** Immobilisé : aucun PM à son prochain tour. */
+    ROOT("Immobilisé", true),
+    /** Amplifié : le prochain sort de dégâts inflige {@code value} % de plus. */
+    EMPOWER("Amplifié", false),
     /** Bouclier de pierre : bloque entièrement la prochaine attaque, puis se brise. */
     STONE_SKIN("Bouclier de pierre", false),
     /** Interdit de lancer des sorts (le déplacement reste possible). */

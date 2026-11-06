@@ -9,18 +9,28 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.prefs.Preferences;
 
-/** Connexion à un serveur en ligne, ou hébergement d'un serveur sur ce PC. Les champs sont mémorisés. */
+/**
+ * Connexion à un serveur : avec un compte (personnages et progression), ou en invité ; ou hébergement d'un
+ * serveur sur ce PC. L'adresse, le compte et le mot de passe du serveur sont mémorisés ; jamais celui du compte.
+ */
 public final class ConnectScreen implements Screen {
 
     /** Ce que le joueur a saisi. {@code host} = adresse sans le port. */
-    public record Request(String host, int port, String name, String password, boolean hostHere) { }
+    public record Request(String host, int port, String name, String password, boolean hostHere, Mode mode,
+                          String accountPassword) { }
+
+    /** Connexion à un compte, création d'un compte, invité sans compte. */
+    public enum Mode { LOGIN, REGISTER, GUEST }
 
     private final Preferences prefs = prefs();
     private final TextField address = new TextField("adresse du serveur (ex. 82.165.10.20)", 80, false);
-    private final TextField name = new TextField("votre pseudo", Protocol.MAX_NAME, false);
-    private final TextField password = new TextField("mot de passe (si le serveur en a un)", 40, true);
-    private final List<TextField> fields = List.of(address, name, password);
+    private final TextField name = new TextField("nom du compte (ou pseudo d'invité)", Protocol.MAX_NAME, false);
+    private final TextField accountPassword = new TextField("mot de passe du compte", 64, true);
+    private final TextField password = new TextField("mot de passe du serveur (s'il en a un)", 40, true);
+    private final List<TextField> fields = List.of(address, name, accountPassword, password);
     private final MenuButton connect;
+    private final MenuButton register;
+    private final MenuButton guest;
     private final MenuButton host;
     private final MenuButton back;
     private final Consumer<Graphics2D> background;
@@ -37,8 +47,10 @@ public final class ConnectScreen implements Screen {
         address.setText(get("address", ""));
         name.setText(get("name", ""));
         password.setText(get("password", ""));
-        connect = new MenuButton("Se connecter", null, true, () -> submit(onConnect, false));
-        host = new MenuButton("Héberger sur ce PC", "Pour jouer en réseau local", false, () -> submit(onConnect, true));
+        connect = new MenuButton("Se connecter", null, true, () -> submit(onConnect, false, Mode.LOGIN));
+        register = new MenuButton("Créer un compte", null, false, () -> submit(onConnect, false, Mode.REGISTER));
+        guest = new MenuButton("Jouer en invité", "Sans personnage", false, () -> submit(onConnect, false, Mode.GUEST));
+        host = new MenuButton("Héberger sur ce PC", "Réseau local", false, () -> submit(onConnect, true, Mode.LOGIN));
         back = new MenuButton("Retour", null, false, onBack);
         (address.text().isEmpty() ? address : name.text().isEmpty() ? name : address).setFocused(true);
     }
@@ -67,12 +79,22 @@ public final class ConnectScreen implements Screen {
         }
     }
 
-    private void submit(Consumer<Request> onConnect, boolean hostHere) {
+    private void submit(Consumer<Request> onConnect, boolean hostHere, Mode mode) {
         if (busy) return;
         String n = name.text().trim();
         if (n.isEmpty()) {
-            setStatus("Choisissez un pseudo", true);
+            setStatus(mode == Mode.GUEST ? "Choisissez un pseudo" : "Indiquez le nom du compte", true);
             focus(name);
+            return;
+        }
+        if (mode != Mode.GUEST && accountPassword.text().isEmpty() && !hostHere) {
+            setStatus("Indiquez le mot de passe du compte", true);
+            focus(accountPassword);
+            return;
+        }
+        if (mode == Mode.REGISTER && accountPassword.text().length() < 4) {
+            setStatus("Mot de passe trop court (4 caractères au moins)", true);
+            focus(accountPassword);
             return;
         }
         String addr = address.text().trim();
@@ -100,7 +122,9 @@ public final class ConnectScreen implements Screen {
         put("password", password.text());
         setStatus(hostHere ? "Démarrage du serveur…" : "Connexion à " + h + ":" + port + "…", false);
         busy = true;
-        onConnect.accept(new Request(h, port, n, password.text(), hostHere));
+        // en hébergeant sans mot de passe de compte : invité sur son propre serveur
+        Mode m = hostHere && accountPassword.text().isEmpty() ? Mode.GUEST : mode;
+        onConnect.accept(new Request(h, port, n, password.text(), hostHere, m, accountPassword.text()));
     }
 
     /** Message d'état ; une erreur réactive les boutons. */
@@ -118,15 +142,19 @@ public final class ConnectScreen implements Screen {
     public void layout(int w, int h) {
         width = w;
         height = h;
-        int fw = 420;
+        int fw = 440;
         int x = (w - fw) / 2;
-        int y = h / 2 - 150;
-        address.setBounds(x, y + 26, fw, 44);
-        name.setBounds(x, y + 106, fw, 44);
-        password.setBounds(x, y + 186, fw, 44);
-        connect.setBounds(x, y + 256, fw, 52);
-        host.setBounds(x, y + 320, (fw - 12) / 2, 56);
-        back.setBounds(x + (fw + 12) / 2, y + 320, (fw - 12) / 2, 56);
+        int y = h / 2 - 236;
+        address.setBounds(x, y + 26, fw, 40);
+        name.setBounds(x, y + 96, fw, 40);
+        accountPassword.setBounds(x, y + 166, fw, 40);
+        password.setBounds(x, y + 236, fw, 40);
+        int half = (fw - 12) / 2;
+        connect.setBounds(x, y + 296, half, 52);
+        register.setBounds(x + half + 12, y + 296, half, 52);
+        guest.setBounds(x, y + 360, half, 54);
+        host.setBounds(x + half + 12, y + 360, half, 54);
+        back.setBounds(x + (fw - 160) / 2, y + 426, 160, 44);
     }
 
     @Override
@@ -139,17 +167,20 @@ public final class ConnectScreen implements Screen {
         background.accept(g);
         g.setColor(new Color(5, 4, 2, 185));
         g.fillRect(0, 0, width, height);
-        int pw = 500;
-        int ph = 470;
+        int pw = 520;
+        int ph = 592;
         int px = (width - pw) / 2;
-        int py = height / 2 - 230;
+        int py = height / 2 - 300;
         UiTheme.panel(g, px, py, pw, ph, 22, true);
         UiTheme.drawCentered(g, "Jouer en ligne", UiTheme.TITLE.deriveFont(26f), width / 2.0, py + 46, UiTheme.GOLD_LIGHT);
         label(g, "Serveur", address);
-        label(g, "Pseudo", name);
-        label(g, "Mot de passe", password);
+        label(g, "Compte", name);
+        label(g, "Mot de passe du compte", accountPassword);
+        label(g, "Mot de passe du serveur (facultatif)", password);
         for (TextField f : fields) f.draw(g, mouseX, mouseY);
         connect.draw(g, mouseX, mouseY);
+        register.draw(g, mouseX, mouseY);
+        guest.draw(g, mouseX, mouseY);
         host.draw(g, mouseX, mouseY);
         back.draw(g, mouseX, mouseY);
         if (!status.isEmpty()) {
@@ -180,7 +211,7 @@ public final class ConnectScreen implements Screen {
                 return;
             }
         }
-        if (connect.press(x, y) || host.press(x, y)) return;
+        if (connect.press(x, y) || register.press(x, y) || guest.press(x, y) || host.press(x, y)) return;
         back.press(x, y);
     }
 

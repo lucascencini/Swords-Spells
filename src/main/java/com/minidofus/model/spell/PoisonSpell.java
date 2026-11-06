@@ -49,6 +49,6 @@ public final class PoisonSpell extends AbstractSpell {
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
-        ctx.addStatus(caster, ctx.fighterAt(target), kind, turns, damagePerTurn);
+        ctx.addStatus(caster, ctx.fighterAt(target), kind, turns, damagePerTurn + param("tick"));
     }
 }

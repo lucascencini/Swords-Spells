@@ -44,4 +44,9 @@ public interface Spell {
 
     /** Applique les effets (les PA sont déjà dépensés par {@link Battle}). */
     void apply(SpellContext ctx, Fighter caster, Cell target);
+
+    /** Copie améliorée par des talents (voir {@link SpellTuning}) ; le sort lui-même ne change jamais. */
+    default Spell tuned(SpellTuning tuning) {
+        return this;
+    }
 }

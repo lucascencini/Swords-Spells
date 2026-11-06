@@ -32,7 +32,7 @@ package com.minidofus.net;
 public final class Protocol {
 
     /** À incrémenter à chaque changement incompatible du protocole ou des règles. */
-    public static final int VERSION = 4;
+    public static final int VERSION = 5;
     public static final int DEFAULT_PORT = 7777;
     public static final int MAX_PLAYERS = 6;
     public static final int MAX_NAME = 16;
@@ -56,6 +56,22 @@ public final class Protocol {
     public static final String TIMER = "TIMER";
     public static final String NOTICE = "NOTICE";
     public static final String PONG = "PONG";
+
+    // comptes et progression
+    /** Client → serveur : créer un personnage (nom, classe). */
+    public static final String CHAR_NEW = "CHAR_NEW";
+    /** Client → serveur : supprimer un personnage (identifiant). */
+    public static final String CHAR_DEL = "CHAR_DEL";
+    /** Client → serveur : enregistrer talents (« id=rang,… ») et sorts équipés (« id,… ») d'un personnage. */
+    public static final String CHAR_SAVE = "CHAR_SAVE";
+    /** Client → serveur : combat solo contre l'ordinateur (taille, carte ou random, difficulté, personnages « id,… »). */
+    public static final String SOLO = "SOLO";
+    /** Client → serveur : quitter son combat solo (abandon s'il n'est pas fini). */
+    public static final String SOLO_QUIT = "SOLO_QUIT";
+    /** Serveur → client : le compte et ses personnages (JSON). */
+    public static final String ACCOUNT = "ACCOUNT";
+    /** Serveur → client : expérience gagnée en fin de combat (JSON). */
+    public static final String REWARD = "REWARD";
 
     private Protocol() { }
 }

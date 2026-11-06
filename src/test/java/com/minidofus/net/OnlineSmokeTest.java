@@ -65,16 +65,16 @@ public final class OnlineSmokeTest {
 
         click(640, 449);                                   // « Jouer en ligne »
         Thread.sleep(400);
-        click(640, 308);                                   // champ adresse
+        click(640, 220);                                   // champ adresse
         selectAllAndPaste("127.0.0.1:" + port);
-        click(640, 388);                                   // champ pseudo
+        click(640, 290);                                   // champ compte / pseudo
         selectAllAndPaste("Lucas");
         shot("1_connexion");
-        click(640, 542);                                   // « Se connecter »
+        click(489, 561);                                   // « Jouer en invité »
         boolean joined = waitFor(() -> bot.lobby != null && bot.lobby.players.size() == 2, 6000);
         System.out.println("  le jeu a rejoint le salon : " + joined);
         Thread.sleep(800);
-        click(233, 467);                                   // « Prendre » la place rouge 1
+        click(233, 485);                                   // « Prendre » la place rouge 1
         waitFor(() -> bot.lobby.slotOwner[0] > 0, 4000);
         click(1000, 730);                                  // champ de chat du salon
         paste("Bonjour Bruno, c'est parti !");

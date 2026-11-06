@@ -28,6 +28,12 @@ public enum CastStyle {
     AQUA_VITA,
     ICE_ZONE,
     STONE_SHIELD,
+    FROST_BOLT,
+    ICE_PRISON,
+    ARCANE_RAY,
+    OVERLOAD,
+    NOVA,
+    METEOR,
     /** Choc contre un mur, un obstacle ou un combattant après une poussée. */
     COLLISION,
     /** Déclenchement d'un piège. */
@@ -37,5 +43,7 @@ public enum CastStyle {
     /** Piqûres de la nuée d'abeilles en début de tour. */
     BEES_TICK,
     /** Morsure du sol gelé en début de tour. */
-    ICE_TICK
+    ICE_TICK,
+    /** Brûlure en début de tour. */
+    BURN_TICK
 }

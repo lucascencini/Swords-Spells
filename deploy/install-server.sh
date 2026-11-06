@@ -60,7 +60,10 @@ Wants=network-online.target
 User=swords
 EnvironmentFile=/etc/swords-spells.env
 # 1 Go de mémoire sur le VPS : 160 Mo suffisent largement au serveur
-ExecStart=/usr/bin/java -Xmx160m -XX:+UseSerialGC -Djava.awt.headless=true -jar /opt/swords-spells/mini-dofus.jar --server --port ${PORT}
+# base des comptes et personnages : /var/lib/swords-spells (créé par systemd, seul dossier modifiable)
+StateDirectory=swords-spells
+StateDirectoryMode=0750
+ExecStart=/usr/bin/java -Xmx160m -XX:+UseSerialGC -Djava.awt.headless=true -jar /opt/swords-spells/mini-dofus.jar --server --port ${PORT} --data /var/lib/swords-spells
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

@@ -69,4 +69,14 @@ public interface HudModel {
     default String waitingLabel() {
         return "L'ordinateur joue…";
     }
+
+    /** Lignes de récompense de fin de combat (expérience, niveaux gagnés), en ligne avec un compte. */
+    default List<String> rewardLines() {
+        return List.of();
+    }
+
+    /** Libellé du bouton de retour en fin de combat en ligne. */
+    default String backLabel() {
+        return "Retour au salon (Échap)";
+    }
 }

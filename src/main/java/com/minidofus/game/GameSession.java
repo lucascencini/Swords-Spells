@@ -82,6 +82,8 @@ public final class GameSession implements HudModel {
     private boolean synced;
     private int pending = -1;          // rang de la commande envoyée en attente de diffusion
     private double timerLeft = -1;     // secondes restantes au combattant actif (-1 = pas de chrono)
+    private List<String> rewardLines = List.of();
+    private String backLabel = "Retour au salon (Échap)";
 
     /** Partie locale. */
     public GameSession(MatchSetup setup, Assets assets, PoseTable poses, SoundPlayer sound, Hud hud,
@@ -92,7 +94,9 @@ public final class GameSession implements HudModel {
     /** Partie en ligne, créée à partir du message MATCH du serveur. */
     public GameSession(MatchInfo info, OnlineLink link, Assets assets, PoseTable poses, SoundPlayer sound, Hud hud,
                        Consumer<Point2D.Double> focus) {
-        this(new MatchSetup(info.theme(), info.seed(), info.red(), info.blue(), null, null), info, link,
+        this(new MatchSetup(info.theme(), info.seed(),
+                        info.red().stream().map(b -> b.toFighterClass(info.levelOverride())).toList(),
+                        info.blue().stream().map(b -> b.toFighterClass(info.levelOverride())).toList(), null, null), info, link,
                 assets, poses, sound, hud, focus);
     }
 
@@ -131,6 +135,25 @@ public final class GameSession implements HudModel {
     public MatchSetup setup() { return setup; }
     Battle battle() { return battle; }
     public boolean isOnline() { return online != null; }
+
+    /** Expérience gagnée, affichée sur l'écran de fin (combat en ligne avec un compte). */
+    public void setRewards(List<String> lines) {
+        rewardLines = List.copyOf(lines);
+    }
+
+    public void setBackLabel(String label) {
+        backLabel = label;
+    }
+
+    @Override
+    public List<String> rewardLines() {
+        return rewardLines;
+    }
+
+    @Override
+    public String backLabel() {
+        return backLabel;
+    }
 
     public int spellCount() {
         return battle.active().fighterClass().spells().size();

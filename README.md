@@ -1,7 +1,8 @@
 # Spells & Swords — combat tactique isométrique
 
-Combat au tour par tour en équipes de 1 à 3 (Guerrier, Mage, Archère, Druide), sur une arène isométrique
-générée aléatoirement, à deux joueurs sur le même PC ou contre l'ordinateur (3 niveaux).
+Combat au tour par tour en équipes de 1 à 3 (Guerrier, Mage, Chasseur, Druide), sur une arène isométrique
+générée aléatoirement, à deux joueurs sur le même PC, contre l'ordinateur (3 niveaux) ou en ligne.
+En ligne, chaque joueur a un compte et des personnages qui progressent : niveaux 1 à 50, talents et sorts à débloquer.
 Application de bureau en **Java 17+ (Swing / Java2D)**, sans aucune dépendance externe : le JDK
 fournit le rendu, le son, et même la création d'un exécutable autonome.
 
@@ -17,8 +18,8 @@ fournit le rendu, le son, et même la création d'un exécutable autonome.
 
 ## Lancer le jeu
 
-**Pour jouer tout de suite** : un JAR déjà compilé est fourni à la racine. Avec Java 17+ installé,
-double-cliquez sur `SpellsAndSwords.jar` ou lancez `java -jar SpellsAndSwords.jar`.
+**Pour jouer tout de suite** : avec Java 17+ installé, double-cliquez sur `SpellsAndSwords.jar` (fourni avec
+chaque version, ou créé par `build.bat`) ou lancez `java -jar SpellsAndSwords.jar`.
 
 Pour compiler : un **JDK 17 ou plus récent** (par exemple [Temurin 21](https://adoptium.net)).
 
@@ -55,12 +56,41 @@ automatique en cas de coupure.
 
 Tous les joueurs doivent avoir la même version du jeu.
 
+## Comptes et progression
+
+| Mes personnages | Arbre de talents (Mage) | Grimoire |
+|---|---|---|
+| ![](docs/screenshots/personnages.jpg) | ![](docs/screenshots/talents.jpg) | ![](docs/screenshots/grimoire.jpg) |
+| **Barre de 9 sorts** | **Expérience en fin de combat** | **Salon avec ses personnages** |
+| ![](docs/screenshots/barre-9-sorts.jpg) | ![](docs/screenshots/experience.jpg) | ![](docs/screenshots/salon-personnages.jpg) |
+
+- **Compte** : « Jouer en ligne » → nom de compte et mot de passe → « Créer un compte » la première fois, puis
+  « Se connecter ». Les comptes sont enregistrés sur le serveur ; le mot de passe ne quitte jamais le PC (seule une
+  clé dérivée est envoyée, puis salée et hachée par le serveur). « Jouer en invité » permet de jouer sans
+  personnage, avec les classes de base.
+- **Personnages** : jusqu'à 6 par compte, de n'importe quelle classe. Chacun a son niveau, son expérience, ses
+  talents et ses sorts équipés.
+- **Expérience** : sur chaque combat terminé (bonus à la victoire), selon le niveau des adversaires et la
+  difficulté. Un combat abandonné ne rapporte rien. Chaque niveau donne +2 % de PV et +1 % de puissance.
+- **Talents** : 1 point par niveau à partir du niveau 2 (49 au niveau 50). Le **Mage** a un arbre complet de
+  26 talents en 3 branches (Pyromancien, Cryomancien, Arcaniste) avec paliers, prérequis et talents hybrides ;
+  les autres classes gagnent pour l'instant niveaux et caractéristiques. Clic gauche : +1 rang, clic droit :
+  −1 rang ; la réinitialisation est gratuite. Le serveur revérifie chaque choix.
+- **Grimoire** : le Mage apprend 6 sorts de plus en montant de niveau (Trait de givre au niveau 3, Prison de
+  glace 6, Rayon arcanique 10, Surcharge 14, Nova élémentaire 18 et l'ultime Météore 25). On en équipe 8 plus un
+  ultime ; la barre d'action s'adapte (touches `1` à `9`).
+- **Combat contre l'ordinateur** : 1 à 3 de ses personnages contre autant d'adversaires au niveau moyen de
+  l'équipe, sur le serveur (il faut être connecté).
+- **Salon** : sur sa place, les flèches font défiler ses personnages puis les classes de base. Le chef du
+  salon choisit « Niveaux : réels » ou « égalisés » (tout le monde au niveau du plus haut personnage, talents
+  conservés).
+
 ## Commandes
 
 | Action | Souris | Clavier |
 |---|---|---|
 | Se déplacer | clic sur une case verte (le chemin et son coût s'affichent au survol) | `D` : mode déplacement |
-| Choisir un sort | clic sur le bouton (info-bulle au survol) | `1` à `5` |
+| Choisir un sort | clic sur le bouton (info-bulle au survol) | `1` à `9` |
 | Lancer le bouclier | clic sur son personnage ou second clic sur le bouton | même touche une seconde fois |
 | Annuler le sort sélectionné | clic droit, ou clic hors des cases valides | `Échap` |
 | Fin du tour | bouton vert | `Espace` ou `Entrée` |
@@ -90,7 +120,7 @@ le bandeau de tour montre cet ordre.
 |---|---|---|
 | **Guerrier** (contrôle, corps à corps) | 100 / 6 / 3 | Frappe assommante (silence) · Coup de charge · Bouclier · Repousser · Grappin |
 | **Mage** (distance, contrôle) | 60 / 7 / 4 | Trait arcanique · Boule de feu (croix) · Zone de glace (3×3, sol gelé 2 tours : dégâts et -2 PM) · Téléportation · Bouclier de pierre (bloque la prochaine attaque) |
-| **Archère** (longue portée, terrain) | 75 / 6 / 3 | Tir précis · Flèche de recul · Piège · Pluie de flèches (3×3) · Bond |
+| **Chasseur** (longue portée, terrain) | 75 / 6 / 3 | Tir précis · Flèche de recul · Piège · Pluie de flèches (3×3) · Bond |
 | **Druide** (soutien, contrôle de zone) | 80 / 6 / 3 | Lancer de corbeau · Nuée d'abeilles (6 dégâts sur 3 tours) · Tornade (3×3, éjecte hors de la zone) · Éclair (sans ligne de vue) · Aqua vita (soin) |
 
 Les valeurs exactes (dégâts, portées, relances) sont dans l'info-bulle de chaque sort et dans
@@ -128,15 +158,19 @@ src/main/java/com/minidofus/
 │   ├── LineOfSight.java      ligne de vue (cases traversées, règle permissive aux coins)
 │   ├── spell/                un fichier par mécanique : frappe, zone, charge, grappin, poison, piège, mobilité…
 │   ├── ai/                   ordinateur : simulation de chaque action et évaluation, 3 niveaux
-│   ├── catalog/              FighterCatalog : tout l'équilibrage au même endroit
+│   ├── catalog/              FighterCatalog (équilibrage des classes) et SpellBook (sorts par niveau)
+│   ├── progression/          niveaux, expérience, talents (lus dans content/talents/*.json), CharacterBuild
 │   └── map/                  génération de cartes (ambiances, décor, garanties de jouabilité)
 ├── engine/                   images (cache, miroirs, teintes), sons (clips préchargés), courbes
 ├── view/                     rendu : projection iso, caméra, scène, personnages
 │   ├── anim/                 petites animations composables (séquence, parallèle, interpolation)
 │   └── fx/                   effets : projectiles, explosions, entailles, chiffres flottants
-├── net/                      jeu en ligne : protocole texte, serveur (salon, chrono, IA, reconnexion), client
+├── net/                      jeu en ligne : protocole texte, serveur (salon, combats solo, chrono, IA, reconnexion), client
+├── server/                   AccountStore : comptes et personnages, un fichier JSON par compte
+├── util/                     Json : lecteur et écrivain JSON minimal (aucune dépendance)
 ├── ui/                       HUD dessiné en Java2D : fiches, frise, barre d'actions, info-bulles, fin de partie
-│   └── menu/                 écran titre (avec partie de démonstration en fond), configuration, boutons
+│   ├── menu/                 écran titre (avec partie de démonstration en fond), configuration, connexion, salon
+│   └── account/              personnages, création, arbre de talents, grimoire, combat contre l'ordinateur
 └── game/                     assemblage : session de jeu, contrôleur de tour, présentateur, fenêtre (menus, combat, pause)
 ```
 
@@ -154,6 +188,12 @@ jeu, et ajouter une IA ou du réseau ne demande de toucher qu'au modèle.
 lancer, finir le tour), le serveur les valide et les diffuse numérotées. Chaque joueur les rejoue sur sa
 propre copie du combat, créée avec la même graine, puis compare une empreinte de l'état. En cas d'écart,
 le combat est rechargé automatiquement.
+
+**Progression** : un personnage se résume à un `CharacterBuild` (classe, niveau, talents, sorts équipés), envoyé
+sous forme de texte dans l'annonce du combat. Chaque client en reconstruit exactement le même combattant
+(`toFighterClass`) : PV et puissance du niveau, talents appliqués aux sorts (`SpellTuning` : dégâts, portée,
+coût, relance, effets ajoutés), ce qui garde le combat en ligne déterministe. Pour ajouter les talents d'une
+autre classe, il suffit d'écrire `content/talents/<classe>.json`.
 
 ## Ce qui a changé par rapport au prototype HTML
 
@@ -205,9 +245,9 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   d'origine (tri, suppression des pixels parasites du découpage, normalisation des tuiles,
   conversion OGG → WAV car Java ne lit pas l'OGG). Il fabrique aussi ce que le pack ne contient pas :
   sols de neige, de sable et de crypte (recoloration des tuiles d'herbe et de pierre), sapins enneigés,
-  cactus dessinés, Archère (recoloration du Mage). Nécessite Python 3 (Pillow, numpy, scipy) et ffmpeg.
+  cactus dessinés, Chasseur (recoloration du Mage). Nécessite Python 3 (Pillow, numpy, scipy) et ffmpeg.
 - **Illustrations fournies** : `tools/import_sources.py` importe les fichiers de `tools/source/` :
-  la planche de l'Archère (détourage, choix des poses de repos et de marche, alignement des pieds,
+  la planche de l'Chasseur (détourage, choix des poses de repos et de marche, alignement des pieds,
   portrait) et le fond de la forêt (rochers peints effacés dans l'aire de jeu, bords prolongés, calage de
   la grille dans `backdrops/forest.properties`), et la planche du désert : damier peint retiré, pointe du
   plateau reconstruite (falaises prolongées puis fondues dans la brume), ciel animé (GIF) placé derrière
@@ -223,7 +263,7 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   déformer leurs extrémités).
 - **Druide** : poses tirées de `tools/source/druid_sheet.jpg`, effets de ses sorts des planches `fx_*`
   (corbeau, abeilles, tornade, éclair, potion), bruitages synthétisés par `tools/druid_sounds.py`.
-- **Personnages** : Guerrier et Mage viennent de `tools/source/warrior_mage_sheet.png`, l'Archère de
+- **Personnages** : Guerrier et Mage viennent de `tools/source/warrior_mage_sheet.png`, l'Chasseur de
   `archer_sheet.png` (poses de repos et de marche vers le sud-est et le nord-est, miroirs pour les deux
   autres directions ; choix des vignettes dans `SHEET_POSES` / `ARCHER_POSES`, réglages dans
   `poses.properties`).
@@ -240,11 +280,14 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
 
 ## Tests
 
-`build.sh` / `build.bat` lancent `AllTests` : 189 vérifications sur les règles (ligne de vue, initiative,
+`build.sh` / `build.bat` lancent `AllTests` : 278 vérifications sur les règles (ligne de vue, initiative,
 statuts, relances, poussées et chocs, pièges, caisses, victoire par équipe), sur la génération de 900 cartes,
-sur l'ordinateur (parties complètes de 1c1 à 3c3, et le niveau Difficile doit battre le Facile), et sur
-le jeu en ligne (déterminisme des commandes, protocole, mot de passe, salon, combat complet entre clients,
-chrono, déconnexion, reconnexion, tentative de jouer à la place d'un autre).
+sur l'ordinateur (parties complètes de 1c1 à 3c3, et le niveau Difficile doit battre le Facile), sur
+la progression (courbe d'expérience, validation des talents, sorts débloqués, effets des talents en combat),
+sur le jeu en ligne (déterminisme des commandes, protocole, mot de passe, salon, combat complet entre clients,
+chrono, déconnexion, reconnexion, tentative de jouer à la place d'un autre) et sur les comptes (création,
+refus, talents et sorts validés par le serveur, combat solo jusqu'à l'expérience, abandon, persistance après
+redémarrage, mot de passe jamais stocké en clair, salon à niveaux égalisés).
 
 Des outils de vérification visuelle, dans `src/test/java` :
 
@@ -256,6 +299,8 @@ Des outils de vérification visuelle, dans `src/test/java` :
   `java -cp build/classes:build/test com.minidofus.model.BalanceSim 30`.
 - `OnlineSmokeTest` joue une partie en ligne dans la vraie fenêtre contre un joueur automatique : connexion,
   salon, chat, combat.
+- `AccountSmokeTest` parcourt les comptes dans la vraie fenêtre : connexion, création d'un personnage, talents,
+  grimoire, combat solo jusqu'à l'écran d'expérience, retour aux personnages, salon.
 - `MenuSmokeTest` parcourt les menus dans la vraie fenêtre : titre, configuration, combat, pause, retour.
 
 ## Pistes

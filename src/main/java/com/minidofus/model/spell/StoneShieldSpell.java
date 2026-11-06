@@ -21,7 +21,7 @@ public final class StoneShieldSpell extends AbstractSpell {
 
     @Override
     public String effectSummary() {
-        return "bloque entièrement la prochaine attaque (pendant " + turns + " tours)";
+        return "bloque entièrement la prochaine attaque (pendant " + (turns + param("turns")) + " tours)";
     }
 
     @Override
@@ -38,6 +38,6 @@ public final class StoneShieldSpell extends AbstractSpell {
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
-        ctx.addStatus(caster, ctx.fighterAt(target), StatusKind.STONE_SKIN, turns, 0);
+        ctx.addStatus(caster, ctx.fighterAt(target), StatusKind.STONE_SKIN, turns + param("turns"), 0);
     }
 }
