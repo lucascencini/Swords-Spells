@@ -775,6 +775,33 @@ def build_druid_fx(dst: Path):
     print(f"effets du Druide : corbeau 4, abeilles 2, tornade {len(spin) + len(end)}, éclair 3, potion {len(FX_POTION)}")
 
 
+# ---------------------------------------------------------------------------- effets du Mage (glace, pierre)
+
+FX_ICE_GROW = [(42, 210, 78, 247), (106, 204, 172, 250), (180, 194, 265, 253), (268, 182, 366, 253)]
+FX_ICE_BURST = [(541, 195, 620, 255), (619, 181, 727, 260), (729, 184, 834, 253), (835, 175, 960, 260)]
+FX_ICE_SHARD = (1571, 349, 1638, 372)
+FX_STONE = [(1658, 137, 1704, 213), (1735, 133, 1803, 211), (1843, 136, 1963, 212), (1987, 146, 2036, 211)]
+
+
+def build_mage_fx(dst: Path):
+    out = dst / "fx"
+    sheet = np.array(Image.open(SOURCE / "mage_fx_sheet.png").convert("RGB"))
+    save_frames([cut_fx(sheet, b) for b in FX_ICE_GROW], out, "ice_grow", "center")
+    burst = [cut_fx(sheet, b) for b in FX_ICE_BURST]
+    save_frames(burst, out, "ice_burst", "bottom")
+    # sol gelé persistant : fissures + anneau de glace, superposés (vus de dessus, déjà en perspective)
+    cracks, ring = burst[1], burst[2]
+    w = max(cracks.width, ring.width)
+    h = max(cracks.height, ring.height)
+    ground = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ground.alpha_composite(cracks, ((w - cracks.width) // 2, (h - cracks.height) // 2))
+    ground.alpha_composite(ring, ((w - ring.width) // 2, (h - ring.height) // 2))
+    ground.save(out / "ice_ground.png", optimize=True)
+    cut_fx(sheet, FX_ICE_SHARD).save(out / "ice_shard.png", optimize=True)
+    save_frames([cut_fx(sheet, b) for b in FX_STONE], out, "stone", "center")
+    print("effets du Mage : glace (4 + 4 images, sol, éclat), bouclier de pierre (4 images)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dst", required=True, type=Path)
@@ -782,6 +809,7 @@ def main():
     build_archer(args.dst)
     build_sheet_classes(args.dst)
     build_druid_fx(args.dst)
+    build_mage_fx(args.dst)
     build_forest(args.dst)
     build_desert(args.dst)
     build_foreground(args.dst)

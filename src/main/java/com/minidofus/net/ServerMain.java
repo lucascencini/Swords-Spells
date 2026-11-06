@@ -4,7 +4,7 @@ import java.io.IOException;
 
 /**
  * Serveur seul, sans fenêtre (pour un VPS) :
- * <pre>java -Xmx128m -jar mini-dofus.jar --server [--port 7777] [--password secret]</pre>
+ * <pre>java -Xmx128m -jar SpellsAndSwords.jar --server [--port 7777] [--password secret]</pre>
  * Le mot de passe peut aussi venir de la variable d'environnement {@code SWORDS_PASSWORD}.
  */
 public final class ServerMain {

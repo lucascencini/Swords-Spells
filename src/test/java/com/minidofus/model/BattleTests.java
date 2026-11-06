@@ -53,6 +53,7 @@ public final class BattleTests {
         grapple();
         fireball();
         heal();
+        iceZone();
         teleportAndLeap();
         poison();
         traps();
@@ -270,24 +271,50 @@ public final class BattleTests {
     }
 
     private static void heal() {
-        Check.suite("Soin");
+        Check.suite("Bouclier de pierre");
         Setup s = new Setup();
         Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 5, 5);
-        Fighter ally = s.add(FighterCatalog.WARRIOR, Team.RED, 7, 5);
-        Fighter enemy = s.add(FighterCatalog.WARRIOR, Team.BLUE, 5, 7);
+        Fighter ally = s.add(FighterCatalog.ARCHER, Team.RED, 7, 5);
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 8, 5);
         Battle b = s.start(8);
-        ally.takeDamage(30);
-        Check.that(!b.canCast(spell(m, "heal"), enemy.position()), "pas de soin sur un ennemi");
-        Check.that(b.cast(spell(m, "heal"), ally.position()), "soin d'un allié à 2 cases");
-        Check.inRange(ally.hp(), 70 + 12, 70 + 18, "allié soigné de 12 à 18");
-        Check.equal(ally.hp() - 70, m.stats().healingDone(), "statistique de soin");
-        Setup s2 = new Setup();
-        Fighter m2 = s2.add(FighterCatalog.MAGE, Team.RED, 5, 5);
-        s2.add(FighterCatalog.WARRIOR, Team.BLUE, 9, 9);
-        Battle b2 = s2.start(8);
-        m2.takeDamage(5);
-        Check.that(b2.cast(spell(m2, "heal"), m2.position()), "soin sur soi");
-        Check.equal(60, m2.hp(), "jamais au-delà des PV max");
+        Check.that(!b.canCast(spell(m, "stoneshield"), w.position()), "pas de bouclier de pierre sur un ennemi");
+        Check.that(b.cast(spell(m, "stoneshield"), ally.position()), "bouclier de pierre sur l'Archère");
+        b.endTurn();
+        b.endTurn();
+        Check.that(b.cast(spell(w, "stun"), ally.position()), "le Guerrier frappe l'Archère protégée");
+        Check.equal(75, ally.hp(), "attaque entièrement bloquée");
+        Check.that(!ally.has(StatusKind.STONE_SKIN), "le bouclier s'est brisé");
+        Check.equal(1L, s.count(BattleEvent.Blocked.class), "événement de blocage");
+        b.endTurn();
+        b.endTurn();
+        b.endTurn();
+        Check.that(b.cast(spell(w, "stun"), ally.position()), "seconde attaque, au tour suivant");
+        Check.that(ally.hp() < 75, "la seconde attaque passe");
+    }
+
+    private static void iceZone() {
+        Check.suite("Zone de glace");
+        Setup s = new Setup();
+        Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 2, 5);
+        Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 5);
+        Fighter a = s.add(FighterCatalog.ARCHER, Team.RED, 6, 6);
+        Battle b = s.start(9);
+        Check.that(b.cast(spell(m, "icezone"), new Cell(6, 5)), "zone de glace lancée");
+        Check.inRange(100 - w.hp(), 8, 11, "dégâts immédiats sur l'ennemi");
+        Check.equal(75, a.hp(), "l'allié dans la zone n'est pas touché");
+        int before = w.hp();
+        b.endTurn();
+        Check.equal(before - 6, w.hp(), "6 dégâts au début du tour sur le sol gelé");
+        Check.equal(w.fighterClass().maxPm() - 2, w.pm(), "2 PM de moins ce tour-là");
+        Check.equal(1, b.iceZones().size(), "la glace persiste");
+        b.endTurn();                                    // Archère
+        b.endTurn();                                    // Mage : 1er tour écoulé
+        Check.equal(1, b.iceZones().size(), "encore là au tour suivant du Mage");
+        b.endTurn();
+        b.endTurn();
+        b.endTurn();                                    // Mage : 2e tour, la glace fond
+        Check.equal(0, b.iceZones().size(), "la glace fond après 2 tours du Mage");
+        Check.equal(1L, s.count(BattleEvent.IceZoneMelted.class), "événement de fonte");
     }
 
     private static void teleportAndLeap() {
@@ -315,12 +342,12 @@ public final class BattleTests {
     }
 
     private static void poison() {
-        Check.suite("Poison");
+        Check.suite("Dégâts sur la durée (nuée d'abeilles)");
         Setup s = new Setup();
-        Fighter m = s.add(FighterCatalog.MAGE, Team.RED, 2, 5);
+        Fighter m = s.add(FighterCatalog.DRUID, Team.RED, 2, 5);
         Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 6, 5);
         Battle b = s.start(10);
-        Check.that(b.cast(spell(m, "poison"), w.position()), "poison lancé");
+        Check.that(b.cast(spell(m, "bees"), w.position()), "nuée lancée");
         Check.equal(100, w.hp(), "pas de dégâts immédiats");
         for (int i = 0; i < 3; i++) {
             b.endTurn();
@@ -329,7 +356,7 @@ public final class BattleTests {
         }
         b.endTurn();
         Check.equal(82, w.hp(), "plus de dégâts après 3 tours");
-        Check.equal(18, m.stats().damageDealt(), "dégâts de poison attribués au lanceur");
+        Check.equal(18, m.stats().damageDealt(), "dégâts sur la durée attribués au lanceur");
     }
 
     private static void druid() {
@@ -344,18 +371,15 @@ public final class BattleTests {
         Check.that(b.cast(spell(d, "lightning"), w.position()), "éclair lancé par-dessus le rocher");
         Check.inRange(100 - w.hp(), 18, 24, "éclair : 18-24 dégâts");
 
-        // nuée d'abeilles : 6 dégâts au début de 3 tours de la cible, cumulable avec le poison
+        // nuée d'abeilles : statut propre
         Setup s2 = new Setup();
         Fighter d2 = s2.add(FighterCatalog.DRUID, Team.RED, 2, 5);
-        Fighter m2 = s2.add(FighterCatalog.MAGE, Team.RED, 2, 7);
         Fighter w2 = s2.add(FighterCatalog.WARRIOR, Team.BLUE, 5, 5);
         Battle b2 = s2.start(4);
         Check.that(b2.cast(spell(d2, "bees"), w2.position()), "nuée lancée");
         b2.endTurn();
-        Check.that(b2.cast(spell(m2, "poison"), w2.position()), "poison par-dessus la nuée");
-        b2.endTurn();
-        Check.equal(100 - 6 - 6, w2.hp(), "nuée et poison piquent tous les deux");
-        Check.that(w2.status(StatusKind.BEES) != null && w2.status(StatusKind.POISON) != null, "deux statuts distincts");
+        Check.equal(100 - 6, w2.hp(), "la nuée pique au début du tour de la cible");
+        Check.that(w2.status(StatusKind.BEES) != null && w2.status(StatusKind.POISON) == null, "statut « nuée », distinct du poison");
 
         // tornade 3×3 : dégâts puis éjection hors de la zone (le centre est chassé à l'opposé du lanceur)
         Setup s3 = new Setup();

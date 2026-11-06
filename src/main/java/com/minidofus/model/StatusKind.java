@@ -12,6 +12,8 @@ public enum StatusKind {
     POISON("Poison", false),
     /** Nuée d'abeilles : inflige {@code value} dégâts au début de chaque tour du porteur (cumulable avec le poison). */
     BEES("Nuée d'abeilles", false),
+    /** Bouclier de pierre : bloque entièrement la prochaine attaque, puis se brise. */
+    STONE_SKIN("Bouclier de pierre", false),
     /** Interdit de lancer des sorts (le déplacement reste possible). */
     SILENCE("Silence", true),
     /** Empêche d'être de nouveau réduit au silence juste après l'avoir été. */

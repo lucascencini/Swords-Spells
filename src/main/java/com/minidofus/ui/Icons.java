@@ -71,7 +71,9 @@ public final class Icons {
             case TORNADO -> pictured(new Color(0xA8D890), new Color(0x2E5A24), "fx/tornado_3", 40);
             case LIGHTNING -> pictured(new Color(0x8A86C8), new Color(0x262850), "fx/lightning_3", 44);
             case AQUA_VITA -> pictured(new Color(0x5ED8C0), new Color(0x145A50), "fx/potion_1", 36);
-            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
+            case ICE_ZONE -> pictured(new Color(0x8AC8F0), new Color(0x1E4870), "fx/ice_burst_4", 30);
+            case STONE_SHIELD -> pictured(new Color(0xC8B898), new Color(0x4E4232), "fx/stone_1", 40);
+            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK, ICE_TICK -> framed(new Color(0x777777), new Color(0x333333), (g, x, y) -> { });
         };
     }
 

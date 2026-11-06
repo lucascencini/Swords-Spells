@@ -30,6 +30,7 @@ public final class Battle implements SpellContext {
     private final boolean simulation;
     private final List<Consumer<BattleEvent>> listeners = new ArrayList<>();
     private final List<Trap> traps = new ArrayList<>();
+    private final List<IceZone> iceZones = new ArrayList<>();
     private List<Fighter> turnOrder = List.of();
     private int activeIndex;
     private int round;
@@ -97,6 +98,13 @@ public final class Battle implements SpellContext {
     public List<Fighter> turnOrder() { return turnOrder; }
     public int activeIndex() { return activeIndex; }
     public List<Trap> traps() { return Collections.unmodifiableList(traps); }
+    public List<IceZone> iceZones() { return Collections.unmodifiableList(iceZones); }
+
+    /** Zone de glace sur cette case, ou {@code null}. */
+    public IceZone iceZoneAt(Cell cell) {
+        for (IceZone z : iceZones) if (z.contains(cell)) return z;
+        return null;
+    }
     public boolean isOver() { return winner != null; }
     public Team winner() { return winner; }
     public int round() { return round; }
@@ -236,6 +244,25 @@ public final class Battle implements SpellContext {
                 continue;
             }
             for (StatusKind expired : f.startTurn()) emit(new BattleEvent.StatusChanged(f, expired, false, 0));
+            // les zones de glace du combattant vieillissent ; un ennemi qui commence son tour dessus gèle
+            for (IceZone z : new ArrayList<>(iceZones)) {
+                if (z.owner() == f && z.age()) {
+                    iceZones.remove(z);
+                    emit(new BattleEvent.IceZoneMelted(z));
+                }
+            }
+            IceZone ice = iceZoneAt(f.position());
+            if (ice != null && ice.owner().isEnemyOf(f)) {
+                int lost = Math.min(f.pm(), ice.pmLoss());
+                f.spendPm(lost);
+                emit(new BattleEvent.Chilled(f, lost));
+                dealDamage(ice.owner(), f, ice.damage(), CastStyle.ICE_TICK);
+                if (isOver()) break;
+                if (!f.isAlive()) {
+                    advance();
+                    continue;
+                }
+            }
             emit(new BattleEvent.TurnStarted(f, round));
             break;
         }
@@ -291,6 +318,10 @@ public final class Battle implements SpellContext {
         for (Trap t : traps) {
             h = 31 * h + t.cell().x() * 97 + t.cell().y();
             h = 31 * h + fighters.indexOf(t.owner());
+        }
+        for (IceZone z : iceZones) {
+            h = 31 * h + z.center().x() * 97 + z.center().y();
+            h = 31 * h + fighters.indexOf(z.owner()) * 7 + z.turnsLeft();
         }
         return h;
     }
@@ -371,6 +402,14 @@ public final class Battle implements SpellContext {
     @Override
     public void dealDamage(Fighter source, Fighter target, int raw, CastStyle style) {
         if (!target.isAlive() || isOver()) return;
+        // le bouclier de pierre encaisse entièrement la prochaine attaque (pas les effets qui durent)
+        boolean attack = style != CastStyle.POISON_TICK && style != CastStyle.BEES_TICK && style != CastStyle.ICE_TICK;
+        if (attack && raw > 0 && target.has(StatusKind.STONE_SKIN)) {
+            target.removeStatus(StatusKind.STONE_SKIN);
+            emit(new BattleEvent.Blocked(target, source));
+            emit(new BattleEvent.StatusChanged(target, StatusKind.STONE_SKIN, false, 0));
+            return;
+        }
         int dealt = target.takeDamage(raw);
         target.stats().addDamageTaken(dealt);
         if (source != null && source.isEnemyOf(target)) source.stats().addDamageDealt(dealt);
@@ -378,6 +417,12 @@ public final class Battle implements SpellContext {
         if (!target.isAlive()) {
             if (source != null && source.isEnemyOf(target)) source.stats().addKill();
             traps.removeIf(t -> t.owner() == target);
+            for (IceZone z : new ArrayList<>(iceZones)) {
+                if (z.owner() == target) {
+                    iceZones.remove(z);
+                    emit(new BattleEvent.IceZoneMelted(z));
+                }
+            }
             emit(new BattleEvent.Died(target, source));
             if (!isTeamAlive(target.team())) {
                 winner = target.team().opposite();
@@ -427,6 +472,19 @@ public final class Battle implements SpellContext {
         emit(new BattleEvent.TrapPlaced(trap));
     }
 
+    @Override
+    public void placeIceZone(Fighter owner, Cell center, int turns, int damage, int pmLoss) {
+        for (IceZone z : new ArrayList<>(iceZones)) {
+            if (z.owner() == owner) {
+                iceZones.remove(z);
+                emit(new BattleEvent.IceZoneMelted(z));
+            }
+        }
+        IceZone zone = new IceZone(center, owner, turns, damage, pmLoss);
+        iceZones.add(zone);
+        emit(new BattleEvent.IceZonePlaced(zone, zone.cells(board)));
+    }
+
     private void emit(BattleEvent event) {
         for (Consumer<BattleEvent> l : listeners) l.accept(event);
     }
@@ -453,6 +511,7 @@ public final class Battle implements SpellContext {
         sim.turnsPlayed = turnsPlayed;
         sim.winner = winner;
         for (Trap t : traps) sim.traps.add(new Trap(t.cell(), mapping.get(t.owner()), t.damage()));
+        for (IceZone z : iceZones) sim.iceZones.add(z.copy(mapping.get(z.owner())));
         return sim;
     }
 

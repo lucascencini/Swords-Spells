@@ -97,6 +97,10 @@ public final class Fighter {
         return healed;
     }
 
+    void removeStatus(StatusKind kind) {
+        statuses.removeIf(s -> s.kind() == kind);
+    }
+
     /** Pose un statut ; un statut du même type est remplacé (pas de cumul). */
     void addStatus(Status status) {
         statuses.removeIf(s -> s.kind() == status.kind());

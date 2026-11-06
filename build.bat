@@ -1,7 +1,7 @@
 @echo off
-rem Compile, teste et assemble Swords & Spells avec le seul JDK (17 ou plus) : ni Maven ni Gradle requis.
+rem Compile, teste et assemble Spells & Swords avec le seul JDK (17 ou plus) : ni Maven ni Gradle requis.
 rem
-rem   build.bat          compile + tests + build\mini-dofus.jar
+rem   build.bat          compile + tests + build\SpellsAndSwords.jar
 rem   build.bat run      idem puis lance le jeu
 rem   build.bat package  idem puis cree une application autonome (Java embarque) dans build\dist
 rem
@@ -95,16 +95,16 @@ if errorlevel 1 (
 rem ------------------------------------------------------------ JAR
 echo.
 echo == JAR
-%JAR_EXE% --create --file "%OUT%\mini-dofus.jar" --main-class com.minidofus.Main -C "%OUT%\classes" .
+%JAR_EXE% --create --file "%OUT%\SpellsAndSwords.jar" --main-class com.minidofus.Main -C "%OUT%\classes" .
 if errorlevel 1 (
   echo [ERREUR] Creation du JAR impossible.
   echo          Outil utilise : %JAR_EXE%  ^(dossier du JDK : !JDK_HOME!^)
   goto :fail
 )
-echo OK : %OUT%\mini-dofus.jar
+echo OK : %OUT%\SpellsAndSwords.jar
 
 if /i "%~1"=="run" (
-  start "" javaw -jar "%OUT%\mini-dofus.jar"
+  start "" javaw -jar "%OUT%\SpellsAndSwords.jar"
   goto :end
 )
 if /i "%~1"=="package" goto :package
@@ -114,13 +114,13 @@ goto :end
 if exist "%OUT%\dist" rmdir /s /q "%OUT%\dist"
 if exist "%OUT%\jpackage-input" rmdir /s /q "%OUT%\jpackage-input"
 mkdir "%OUT%\jpackage-input"
-copy /y "%OUT%\mini-dofus.jar" "%OUT%\jpackage-input\" >nul
-%JPACKAGE_EXE% --type app-image --name SwordsAndSpells --app-version 1.0.0 --input "%OUT%\jpackage-input" --main-jar mini-dofus.jar --main-class com.minidofus.Main --add-modules java.desktop --jlink-options "--strip-debug --no-header-files --no-man-pages --strip-native-commands" --icon packaging\icon.ico --dest "%OUT%\dist"
+copy /y "%OUT%\SpellsAndSwords.jar" "%OUT%\jpackage-input\" >nul
+%JPACKAGE_EXE% --type app-image --name SpellsAndSwords --app-version 1.0.0 --input "%OUT%\jpackage-input" --main-jar SpellsAndSwords.jar --main-class com.minidofus.Main --add-modules java.desktop --jlink-options "--strip-debug --no-header-files --no-man-pages --strip-native-commands" --icon packaging\icon.ico --dest "%OUT%\dist"
 if errorlevel 1 (
   echo [ERREUR] jpackage a echoue.
   goto :fail
 )
-echo OK : application autonome dans %OUT%\dist\SwordsAndSpells : lancer SwordsAndSpells.exe
+echo OK : application autonome dans %OUT%\dist\SpellsAndSwords : lancer SpellsAndSwords.exe
 goto :end
 
 :fail

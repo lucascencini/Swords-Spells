@@ -59,7 +59,7 @@ public final class TitleScreen implements Screen {
 
         double drift = Math.sin(clock * 1.2) * 4;
         int titleY = (int) (height * 0.23 + drift);
-        UiTheme.drawOutlinedCentered(g, "Swords & Spells", UiTheme.TITLE.deriveFont(64f), width / 2.0, titleY,
+        UiTheme.drawOutlinedCentered(g, "Spells & Swords", UiTheme.TITLE.deriveFont(64f), width / 2.0, titleY,
                 UiTheme.GOLD_LIGHT, new Color(40, 25, 5, 230));
         UiTheme.drawOutlinedCentered(g, "Combat tactique au tour par tour", UiTheme.BODY_BOLD.deriveFont(18f),
                 width / 2.0, titleY + 44, UiTheme.PARCHMENT, new Color(0, 0, 0, 200));

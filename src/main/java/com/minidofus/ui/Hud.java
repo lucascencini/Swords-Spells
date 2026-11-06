@@ -331,6 +331,10 @@ public final class Hud {
             statusDot(g, x, top, UiTheme.POISON, "P");
             x -= 17;
         }
+        if (v.shows(StatusKind.STONE_SKIN)) {
+            statusDot(g, x, top, new Color(0xC8B898), "R");
+            x -= 17;
+        }
         if (v.shows(StatusKind.BEES)) {
             statusDot(g, x, top, UiTheme.BEES, "A");
             x -= 17;

@@ -10,6 +10,8 @@ import com.minidofus.model.spell.AreaStrikeSpell;
 import com.minidofus.model.spell.ChargeSpell;
 import com.minidofus.model.spell.GrappleSpell;
 import com.minidofus.model.spell.HealSpell;
+import com.minidofus.model.spell.IceZoneSpell;
+import com.minidofus.model.spell.StoneShieldSpell;
 import com.minidofus.model.spell.MobilitySpell;
 import com.minidofus.model.spell.PoisonSpell;
 import com.minidofus.model.spell.ShieldSpell;
@@ -34,14 +36,14 @@ public final class FighterCatalog {
             new StrikeSpell(Base.of("push", "Repousser", 3, 1, 1).cooldown(1), new IntRange(6, 9), CastStyle.PUSH_STRIKE, 2, 0),
             new GrappleSpell(Base.of("grapple", "Grappin", 3, 2, 5).cooldown(2), new IntRange(4, 6), 3)));
 
-    /** Distance et mobilité : dégâts de zone, soin, téléportation, poison. */
+    /** Distance et contrôle : trait arcanique, boule de feu, zone de glace, téléportation, bouclier de pierre. */
     public static final FighterClass MAGE = new FighterClass("mage", "Mage", 60, 7, 4, 10, 4, List.of(
             new StrikeSpell(Base.of("arcane", "Trait arcanique", 3, 1, 5), new IntRange(8, 12), CastStyle.ARCANE_BOLT),
             new AreaStrikeSpell(Base.of("fireball", "Boule de feu", 4, 1, 6).cooldown(1), new IntRange(14, 20),
                     AreaStrikeSpell.Shape.CROSS, CastStyle.FIREBALL),
-            new HealSpell(Base.of("heal", "Soin", 3, 1, 3).cooldown(1), new IntRange(12, 18)),
+            new IceZoneSpell(Base.of("icezone", "Zone de glace", 4, 2, 6).cooldown(3), new IntRange(8, 11), 2, 6, 2),
             new MobilitySpell(Base.of("teleport", "Téléportation", 2, 1, 4).cooldown(3), CastStyle.TELEPORT, MoveStyle.TELEPORT),
-            new PoisonSpell(Base.of("poison", "Poison", 3, 1, 6).cooldown(2), 6, 3)));
+            new StoneShieldSpell(Base.of("stoneshield", "Bouclier de pierre", 3, 0, 3).cooldown(3), 2)));
 
     /** Longue portée et contrôle du terrain : tir précis, recul, pièges, pluie de flèches, bond. */
     public static final FighterClass ARCHER = new FighterClass("archer", "Archère", 75, 6, 3, 12, 5, List.of(
