@@ -105,8 +105,8 @@ public final class AiTests {
                 List<FighterClass> red = new ArrayList<>();
                 List<FighterClass> blue = new ArrayList<>();
                 for (int i = 0; i < size; i++) {
-                    red.add(all.get((i + size) % 3));
-                    blue.add(all.get((i + size + 1) % 3));
+                    red.add(all.get((i + size) % all.size()));
+                    blue.add(all.get((i + size + 1) % all.size()));
                 }
                 games++;
                 if (play(theme, 100 + size, red, blue, Difficulty.NORMAL, Difficulty.NORMAL) != null) finished++;
@@ -122,7 +122,8 @@ public final class AiTests {
         int hardWins = 0;
         int games = 12;
         for (int i = 0; i < games; i++) {
-            List<FighterClass> team = List.of(FighterCatalog.ALL.get(i % 3), FighterCatalog.ALL.get((i + 1) % 3));
+            List<FighterClass> team = List.of(FighterCatalog.ALL.get(i % FighterCatalog.ALL.size()),
+                    FighterCatalog.ALL.get((i + 1) % FighterCatalog.ALL.size()));
             boolean hardIsRed = i % 2 == 0;
             Team w = play(MapTheme.values()[i % MapTheme.values().length], 500 + i, team, team,
                     hardIsRed ? Difficulty.HARD : Difficulty.EASY, hardIsRed ? Difficulty.EASY : Difficulty.HARD);

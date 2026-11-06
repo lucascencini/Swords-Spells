@@ -41,7 +41,7 @@ public final class MenuSmokeTest {
         System.out.println("zone de jeu : " + content.getWidth() + "x" + content.getHeight());
 
         shot("1_titre");
-        click(640, 409);                 // « Contre l'ordinateur »
+        click(640, 376);                 // « Contre l'ordinateur »
         Thread.sleep(500);
         move(376, 380);                  // survol du premier combattant : info-bulle de classe
         Thread.sleep(300);

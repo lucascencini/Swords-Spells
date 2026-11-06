@@ -331,6 +331,10 @@ public final class Hud {
             statusDot(g, x, top, UiTheme.POISON, "P");
             x -= 17;
         }
+        if (v.shows(StatusKind.BEES)) {
+            statusDot(g, x, top, UiTheme.BEES, "A");
+            x -= 17;
+        }
         if (v.shows(StatusKind.SILENCE)) statusDot(g, x, top, UiTheme.SILENCE, "S");
     }
 

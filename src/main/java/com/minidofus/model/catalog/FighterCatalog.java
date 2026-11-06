@@ -1,6 +1,7 @@
 package com.minidofus.model.catalog;
 
 import com.minidofus.model.CastStyle;
+import com.minidofus.model.StatusKind;
 import com.minidofus.model.FighterClass;
 import com.minidofus.model.IntRange;
 import com.minidofus.model.MoveStyle;
@@ -52,7 +53,17 @@ public final class FighterCatalog {
                     AreaStrikeSpell.Shape.SQUARE, CastStyle.ARROW_RAIN),
             new MobilitySpell(Base.of("leap", "Bond", 2, 1, 3).inLine().cooldown(2), CastStyle.LEAP, MoveStyle.LEAP)));
 
-    public static final List<FighterClass> ALL = List.of(WARRIOR, MAGE, ARCHER);
+    /** Soutien et contrôle : corbeau, nuée d'abeilles, tornade qui éjecte, éclair sans ligne de vue, soin. */
+    public static final FighterClass DRUID = new FighterClass("druid", "Druide", 80, 6, 3, 9, 3, List.of(
+            new StrikeSpell(Base.of("crow", "Lancer de corbeau", 3, 1, 6), new IntRange(9, 13), CastStyle.CROW),
+            new PoisonSpell(Base.of("bees", "Nuée d'abeilles", 3, 1, 5).cooldown(2), 6, 3, CastStyle.BEES, StatusKind.BEES),
+            new AreaStrikeSpell(Base.of("tornado", "Tornade", 4, 2, 6).cooldown(2), new IntRange(8, 12),
+                    AreaStrikeSpell.Shape.SQUARE, CastStyle.TORNADO, 1),
+            new StrikeSpell(Base.of("lightning", "Éclair", 4, 2, 7).noLineOfSight().cooldown(2), new IntRange(18, 24),
+                    CastStyle.LIGHTNING),
+            new HealSpell(Base.of("aquavita", "Aqua vita", 3, 0, 3).cooldown(2), new IntRange(14, 20), CastStyle.AQUA_VITA)));
+
+    public static final List<FighterClass> ALL = List.of(WARRIOR, MAGE, ARCHER, DRUID);
 
     public static FighterClass byId(String id) {
         for (FighterClass c : ALL) if (c.id().equals(id)) return c;

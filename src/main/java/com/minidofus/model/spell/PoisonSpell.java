@@ -14,11 +14,18 @@ public final class PoisonSpell extends AbstractSpell {
 
     private final int damagePerTurn;
     private final int turns;
+    private final StatusKind kind;
 
     public PoisonSpell(Base base, int damagePerTurn, int turns) {
-        super(base, TargetMode.ENEMY, CastStyle.POISON);
+        this(base, damagePerTurn, turns, CastStyle.POISON, StatusKind.POISON);
+    }
+
+    /** Variante : autre mise en scène et autre statut (par exemple la nuée d'abeilles du Druide). */
+    public PoisonSpell(Base base, int damagePerTurn, int turns, CastStyle style, StatusKind kind) {
+        super(base, TargetMode.ENEMY, style);
         this.damagePerTurn = damagePerTurn;
         this.turns = turns;
+        this.kind = kind;
     }
 
     public int damagePerTurn() { return damagePerTurn; }
@@ -42,6 +49,6 @@ public final class PoisonSpell extends AbstractSpell {
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
-        ctx.addStatus(caster, ctx.fighterAt(target), StatusKind.POISON, turns, damagePerTurn);
+        ctx.addStatus(caster, ctx.fighterAt(target), kind, turns, damagePerTurn);
     }
 }

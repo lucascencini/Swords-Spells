@@ -25,7 +25,7 @@ import java.util.Random;
  * <pre>
  *   --map forest|ruins|lake|snow|desert|dungeon   carte (sinon aléatoire)
  *   --seed 1234                      graine de la carte (pour rejouer exactement la même)
- *   --red warrior,archer             composition de l'équipe rouge (1 à 3 parmi warrior, mage, archer)
+ *   --red warrior,archer             composition de l'équipe rouge (1 à 3 parmi warrior, mage, archer, druid)
  *   --blue mage                      composition de l'équipe bleue
  *   --ai easy|normal|hard            l'ordinateur joue l'équipe bleue
  *   --ai-red easy|normal|hard        l'ordinateur joue l'équipe rouge

@@ -23,7 +23,12 @@ public enum Sfx {
     TURN("misc_01", 0.4),
     BUFF("misc_01", 0.5),
     VICTORY("item_gem_02", 0.55),
-    VICTORY_COINS("item_coins_02", 0.5);
+    VICTORY_COINS("item_coins_02", 0.5),
+    CROW("druid_crow", 0.45),
+    BEES("druid_bees", 0.4),
+    WIND("druid_wind", 0.5),
+    THUNDER("druid_thunder", 0.6),
+    CHIME("druid_chime", 0.4);
 
     private final String file;
     private final double volume;

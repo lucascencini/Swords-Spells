@@ -38,6 +38,7 @@ public final class UiTheme {
     public static final Color SHIELD = new Color(0x88CCFF);
 
     public static final Color POISON = new Color(0x7BD34A);
+    public static final Color BEES = new Color(0xF2C94C);
     public static final Color SILENCE = new Color(0xC6B5E8);
 
     /** Couleur d'équipe (anneaux, cartes, frise). */

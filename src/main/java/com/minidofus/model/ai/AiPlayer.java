@@ -167,7 +167,7 @@ public final class AiPlayer {
             score += sign * f.hp() * hpWeight;
             for (Status s : f.statuses()) {
                 switch (s.kind()) {
-                    case POISON -> score -= sign * s.value() * s.turnsLeft() * 0.8;
+                    case POISON, BEES -> score -= sign * s.value() * s.turnsLeft() * 0.8;
                     case SILENCE -> score -= sign * 9;
                     case SHIELD -> score += sign * 4 * difficulty.threatWeight * 10;
                     default -> { }
