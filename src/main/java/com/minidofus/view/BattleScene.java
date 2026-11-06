@@ -7,6 +7,7 @@ import com.minidofus.model.Fighter;
 import com.minidofus.model.Terrain;
 import com.minidofus.model.Trap;
 import com.minidofus.model.map.Arena;
+import com.minidofus.model.map.Biome;
 import com.minidofus.model.map.DecorKind;
 import com.minidofus.model.map.DecorPlacement;
 import com.minidofus.ui.UiTheme;
@@ -17,7 +18,9 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Graphics2D;
+import java.awt.RadialGradientPaint;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
@@ -34,8 +37,6 @@ import java.util.Map;
  */
 public final class BattleScene {
 
-    private static final String[] GRASS = {"tiles/grass_1", "tiles/grass_2", "tiles/grass_3",
-            "tiles/grass_4", "tiles/grass_5", "tiles/grass_6"};
 
     private final Assets assets;
     private final PoseTable poses;
@@ -43,6 +44,8 @@ public final class BattleScene {
     private final Map<Fighter, FighterView> views = new LinkedHashMap<>();
     private final EffectLayer effects = new EffectLayer();
     private final BackgroundPainter background = new BackgroundPainter();
+    private final AmbientParticles particles;
+    private final List<Point2D.Double> lights = new ArrayList<>();
     private final List<DecorSprite> sprites = new ArrayList<>();
     private final List<Trap> traps = new ArrayList<>();
     private final List<Object> drawOrder = new ArrayList<>();
@@ -77,6 +80,7 @@ public final class BattleScene {
         this.poses = poses;
         this.arena = arena;
         for (FighterView v : fighterViews) views.put(v.fighter(), v);
+        this.particles = new AmbientParticles(arena.theme().biome());
         buildGround();
         buildSprites();
     }
@@ -105,11 +109,7 @@ public final class BattleScene {
         for (int sum = 0; sum <= 2 * (n - 1); sum++) {           // de l'arrière vers l'avant
             for (int x = Math.max(0, sum - n + 1); x <= Math.min(n - 1, sum); x++) {
                 int y = sum - x;
-                String tile = switch (board.terrain(x, y)) {
-                    case WATER -> "tiles/water";
-                    case STONE -> "tiles/stone";
-                    default -> GRASS[board.variant(x, y) % GRASS.length];
-                };
+                String tile = tileFor(board.terrain(x, y), board.variant(x, y));
                 BufferedImage img = assets.image(tile);
                 g.drawImage(img, (int) Math.round(Iso.worldX(x, y) - Iso.TILE_ANCHOR_X),
                         (int) Math.round(Iso.worldY(x, y) - Iso.TILE_ANCHOR_Y), null);
@@ -117,7 +117,8 @@ public final class BattleScene {
         }
 
         g.setStroke(new BasicStroke(1f));
-        g.setColor(new Color(20, 40, 10, 38));
+        boolean darkGround = arena.theme().biome() == Biome.DUNGEON;
+        g.setColor(darkGround ? new Color(255, 230, 200, 26) : new Color(20, 40, 10, 38));
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
                 if (board.terrain(x, y) != Terrain.WATER) g.draw(diamond(x, y, 0));
@@ -128,6 +129,25 @@ public final class BattleScene {
             if (d.kind().role() == DecorKind.Role.FLOWER) drawDecor(g, d);
         }
         g.dispose();
+    }
+
+    /** Tuile à utiliser pour une case, selon le biome de la carte. */
+    private String tileFor(Terrain terrain, int variant) {
+        String prefix;
+        String stone;
+        String water;
+        switch (arena.theme().biome()) {
+            case SNOW -> { prefix = "snow"; stone = "snow_stone"; water = "ice"; }
+            case DESERT -> { prefix = "sand"; stone = "sand_stone"; water = "water"; }
+            case DUNGEON -> { prefix = "dungeon"; stone = "dungeon_stone"; water = "dungeon_water"; }
+            default -> { prefix = "grass"; stone = "stone"; water = "water"; }
+        }
+        return switch (terrain) {
+            case WATER -> "tiles/" + water;
+            case ICE -> "tiles/ice";
+            case STONE -> "tiles/" + stone;
+            case GRASS -> "tiles/" + prefix + "_" + (variant % 6 + 1);
+        };
     }
 
     private void buildSprites() {
@@ -143,6 +163,7 @@ public final class BattleScene {
             double wy = Iso.worldY(d.x(), d.y());
             Cell cell = d.kind().isBlocking() ? new Cell((int) Math.round(d.x()), (int) Math.round(d.y())) : null;
             sprites.add(new DecorSprite(img, wx - w / 2, wy - h * anchorY, w, h, d.x() + d.y(), cell));
+            if (d.kind().isLight()) lights.add(new Point2D.Double(wx, wy - h * anchorY + 10));
         }
         sprites.sort(Comparator.comparingDouble(o -> o.depth));
     }
@@ -181,18 +202,20 @@ public final class BattleScene {
     public void update(double dt) {
         for (DecorSprite s : sprites) s.shake = Math.max(0, s.shake - dt * 4);
         waterClock += dt;
+        particles.update(dt);
         for (FighterView v : views.values()) v.update(dt);
         effects.update(dt);
     }
 
     public void draw(Graphics2D g, Camera camera, int width, int height, Highlights highlights, Fighter active) {
-        g.drawImage(background.get(width, height, arena.seed()), 0, 0, null);
+        g.drawImage(background.get(width, height, arena.seed(), arena.theme().biome()), 0, 0, null);
 
         AffineTransform screen = g.getTransform();
         g.transform(camera.transform());
 
         g.drawImage(ground, (int) Math.round(groundBounds.getX()), (int) Math.round(groundBounds.getY()), null);
         drawWaterShimmer(g);
+        drawLights(g);
         drawHighlights(g, highlights);
         for (Trap t : traps) drawTrap(g, t);
         for (FighterView v : views.values()) v.drawGroundMarks(g, v.fighter() == active);
@@ -214,8 +237,22 @@ public final class BattleScene {
 
         effects.drawWorld(g);
         g.setTransform(screen);
+        particles.draw(g, width, height);
         effects.drawScreen(g, camera);
         drawPathLabel(g, camera, highlights);
+    }
+
+    /** Halo vacillant des torches, posé sur le sol. */
+    private void drawLights(Graphics2D g) {
+        for (int i = 0; i < lights.size(); i++) {
+            Point2D.Double p = lights.get(i);
+            double flicker = 0.85 + 0.15 * Math.sin(waterClock * 7 + i * 1.7) * Math.sin(waterClock * 3.1 + i);
+            float r = (float) (150 * flicker);
+            g.setPaint(new RadialGradientPaint((float) p.x, (float) p.y + 30, r, new float[] {0f, 0.4f, 1f},
+                    new Color[] {new Color(255, 170, 80, (int) (95 * flicker)), new Color(255, 130, 50, (int) (40 * flicker)),
+                            new Color(255, 110, 40, 0)}));
+            g.fill(new Ellipse2D.Double(p.x - r, p.y + 30 - r * 0.6, r * 2, r * 1.2));
+        }
     }
 
     /** Léger miroitement sur l'eau, sans recalculer le sol. */
@@ -224,8 +261,10 @@ public final class BattleScene {
         Composite saved = g.getComposite();
         for (int x = 0; x < board.size(); x++) {
             for (int y = 0; y < board.size(); y++) {
-                if (board.terrain(x, y) != Terrain.WATER) continue;
-                double a = 0.06 + 0.06 * Math.sin(waterClock * 1.8 + x * 0.9 + y * 1.3);
+                Terrain t = board.terrain(x, y);
+                if (t != Terrain.WATER && t != Terrain.ICE) continue;
+                double speed = t == Terrain.ICE ? 0.6 : 1.8;
+                double a = 0.05 + 0.05 * Math.sin(waterClock * speed + x * 0.9 + y * 1.3);
                 g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) a));
                 g.setColor(Color.WHITE);
                 g.fill(diamond(x, y, 4));
@@ -260,10 +299,10 @@ public final class BattleScene {
         Color team = UiTheme.teamColor(trap.owner().team());
         double pulse = 0.5 + 0.5 * Math.sin(waterClock * 3);
         g.setColor(new Color(30, 20, 10, 150));
-        g.fill(new java.awt.geom.Ellipse2D.Double(cx - 15, cy - 8, 30, 16));
+        g.fill(new Ellipse2D.Double(cx - 15, cy - 8, 30, 16));
         g.setStroke(new BasicStroke(2f));
         g.setColor(UiTheme.withAlpha(team, (int) (160 + 80 * pulse)));
-        g.draw(new java.awt.geom.Ellipse2D.Double(cx - 15, cy - 8, 30, 16));
+        g.draw(new Ellipse2D.Double(cx - 15, cy - 8, 30, 16));
         Path2D teeth = new Path2D.Double();
         for (int i = 0; i < 8; i++) {
             double a = i * Math.PI / 4;

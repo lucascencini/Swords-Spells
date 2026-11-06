@@ -112,10 +112,23 @@ public final class GameView extends JComponent {
 
     private void newSession(MatchSetup setup) {
         session = new GameSession(setup, assets, poses, sound, hud);
+        sound.loop(ambienceOf(setup.theme()), 0.32);
         if (getWidth() > 0) {
             hud.layout(getWidth(), getHeight(), session.spellCount());
             fitCamera();
         }
+    }
+
+    /** Ambiance sonore en boucle de chaque carte (fichiers générés par tools/ambience.py). */
+    private static String ambienceOf(MapTheme theme) {
+        return switch (theme) {
+            case FOREST -> "amb_forest";
+            case RUINS -> "amb_ruins";
+            case LAKE -> "amb_lake";
+            case SNOW -> "amb_snow";
+            case DESERT -> "amb_desert";
+            case DUNGEON -> "amb_dungeon";
+        };
     }
 
     private MapTheme randomTheme() {
