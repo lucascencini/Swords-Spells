@@ -178,11 +178,7 @@ public final class FighterView {
         Point2D.Double feet = worldFeet();
         String classId = fighter.classId();
         boolean animatedWalk = poses.hasWalk(classId);
-        BufferedImage img = poses.image(classId, facing);
-        if (walking && animatedWalk) {
-            List<BufferedImage> frames = poses.walk(classId, facing);
-            img = frames.get((int) (walkDistance * WALK_FRAMES_PER_CELL) % frames.size());
-        }
+        BufferedImage img = currentImage(poses);
         // avec un vrai cycle de marche, plus besoin de petits bonds ni de balancement
         double hop = animatedWalk && walking ? this.hop * 0.15 : this.hop;
         double spriteScale = poses.scale(classId);
@@ -225,6 +221,31 @@ public final class FighterView {
         g.setComposite(savedComposite);
         if (shownHp > 0 && fade > 0.5) drawStatusBadges(g, feet.x, feet.y + y - 6);
     }
+
+    /** Pose affichée : image de repos, ou image du cycle de marche. */
+    private BufferedImage currentImage(PoseTable poses) {
+        String classId = fighter.classId();
+        if (walking && poses.hasWalk(classId)) {
+            List<BufferedImage> frames = poses.walk(classId, facing);
+            return frames.get((int) (walkDistance * WALK_FRAMES_PER_CELL) % frames.size());
+        }
+        return poses.image(classId, facing);
+    }
+
+    /** Image et emprise du combattant posé au sol, pour son ombre portée ; {@code null} une fois à terre. */
+    public Silhouette silhouette(PoseTable poses) {
+        if (deathProgress > 0 || shownHp <= 0) return null;
+        Point2D.Double feet = worldFeet();
+        BufferedImage img = currentImage(poses);
+        double s = poses.scale(fighter.classId());
+        double w = img.getWidth() * s;
+        double h = img.getHeight() * s;
+        return new Silhouette(img, feet.x - w / 2, feet.y - h * 0.94, w, h, feet.x, feet.y, fade);
+    }
+
+    /** Sprite à plat sur le sol (position en coordonnées du monde) et point d'appui (les pieds). */
+    public record Silhouette(BufferedImage image, double x, double y, double w, double h, double feetX, double feetY,
+                             double alpha) { }
 
     /** Aura colorée au sol et étincelles qui montent pendant une incantation. */
     private void drawCastAura(Graphics2D g, Point2D.Double feet, double strength) {

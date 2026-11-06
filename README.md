@@ -216,6 +216,14 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   fichier `.properties`). Pour une nouvelle carte illustrée : ajouter l'image, relever les 4 coins du
   plateau peint (fond, droite, avant, gauche), l'importer de la même façon et indiquer son nom dans
   `MapTheme`.
+- **Personnages** : Guerrier et Mage viennent de `tools/source/warrior_mage_sheet.png`, l'Archère de
+  `archer_sheet.png` (poses de repos et de marche vers le sud-est et le nord-est, miroirs pour les deux
+  autres directions ; choix des vignettes dans `SHEET_POSES` / `ARCHER_POSES`, réglages dans
+  `poses.properties`).
+- **Ombres et premier plan** : dans le `.properties` d'une carte illustrée, `shadow = dx, dy, opacité`
+  couche les ombres portées à l'opposé du soleil de l'illustration ; `foreground = <nom>` ajoute des
+  éléments flous dans les coins bas (`<nom>_left.png`, `<nom>_right.png`), avec `foreground.sway` (balancement)
+  et `foreground.dust` (voile de poussière).
 - **Perspective des cartes illustrées** : la grille n'y est pas un losange régulier mais une perspective
   (homographie, `view/Projection`) calée sur les coins du plateau peint (`grid.top`, `grid.right`,
   `grid.bottom`, `grid.left` dans le `.properties`). Elle épouse ainsi les bords de l'illustration ; les

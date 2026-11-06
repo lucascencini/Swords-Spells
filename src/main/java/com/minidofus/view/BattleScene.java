@@ -27,6 +27,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,12 @@ public final class BattleScene {
     private SkyLayer sky;
     /** Grille → monde : isométrie, ou perspective calée sur le plateau d'une carte illustrée. */
     private Projection projection = Projection.ISO;
+    /** Ombres portées : décalage au sol par unité de hauteur (direction opposée au soleil) et opacité. */
+    private double sunX = 0.45;
+    private double sunY = 0.25;
+    private float shadowAlpha = 0.28f;
+    private final Map<BufferedImage, Map<String, CastShadow>> shadowCache = new IdentityHashMap<>();
+    private ForegroundLayer foreground;
     private double skyBottomY;
     private Rectangle2D groundBounds;
     private double waterClock;
@@ -73,7 +80,13 @@ public final class BattleScene {
         final Cell cell;
         double shake;
 
-        DecorSprite(BufferedImage image, double x, double y, double w, double h, double depth, Cell cell) {
+        final double feetX;
+        final double feetY;
+
+        DecorSprite(BufferedImage image, double x, double y, double w, double h, double depth, Cell cell,
+                    double feetX, double feetY) {
+            this.feetX = feetX;
+            this.feetY = feetY;
             this.image = image;
             this.x = x;
             this.y = y;
@@ -90,10 +103,11 @@ public final class BattleScene {
         this.arena = arena;
         for (FighterView v : fighterViews) views.put(v.fighter(), v);
         this.particles = new AmbientParticles(arena.theme().biome());
+        if (arena.theme().biome() == Biome.DUNGEON) shadowAlpha = 0;   // éclairage de torches : pas de soleil
         loadBackdrop();
         for (FighterView v : views.values()) v.setProjection(projection);
-        buildGround();
         buildSprites();
+        buildGround();
     }
 
     public FighterView view(Fighter f) { return views.get(f); }
@@ -127,6 +141,18 @@ public final class BattleScene {
         if (p.getProperty("grid.top") != null) {
             projection = Projection.fromCorners(imagePoint(p, "grid.top", scale), imagePoint(p, "grid.right", scale),
                     imagePoint(p, "grid.bottom", scale), imagePoint(p, "grid.left", scale), n);
+        }
+        String shadow = p.getProperty("shadow");
+        if (shadow != null) {
+            String[] v = shadow.split(",");
+            sunX = Double.parseDouble(v[0].trim());
+            sunY = Double.parseDouble(v[1].trim());
+            shadowAlpha = Float.parseFloat(v[2].trim());
+        }
+        String fg = p.getProperty("foreground");
+        if (fg != null) {
+            foreground = new ForegroundLayer(assets, fg.trim(), Boolean.parseBoolean(p.getProperty("foreground.dust", "false").trim()),
+                    Boolean.parseBoolean(p.getProperty("foreground.sway", "false").trim()));
         }
         String skyName = p.getProperty("sky");
         if (skyName != null) {
@@ -164,10 +190,11 @@ public final class BattleScene {
         Board board = arena.board();
         int n = board.size();
         Rectangle2D grid = projection.outline(n).getBounds2D();
-        double minX = grid.getMinX() - 2;
-        double maxX = grid.getMaxX() + 2;
+        double margin = shadowAlpha > 0 ? 60 : 2;                    // place pour les ombres des obstacles du bord
+        double minX = grid.getMinX() - margin;
+        double maxX = grid.getMaxX() + margin;
         double minY = grid.getMinY() - 4;
-        double maxY = grid.getMaxY() + 24;
+        double maxY = grid.getMaxY() + 24 + (shadowAlpha > 0 ? margin : 0);
         groundBounds = new Rectangle2D.Double(minX, minY, maxX - minX, maxY - minY);
 
         ground = Assets.createImage((int) Math.ceil(groundBounds.getWidth()), (int) Math.ceil(groundBounds.getHeight()));
@@ -201,6 +228,9 @@ public final class BattleScene {
             }
         }
 
+        if (shadowAlpha > 0) {
+            for (DecorSprite d : sprites) drawShadow(g, d.image, d.x, d.y, d.w, d.h, d.feetX, d.feetY, shadowAlpha);
+        }
         if (backdrop != null) drawArenaOutline(g, projection.outline(n));
         for (DecorPlacement d : arena.decor()) {
             if (d.kind().role() == DecorKind.Role.FLOWER) drawDecor(g, d);
@@ -250,7 +280,7 @@ public final class BattleScene {
             double wx = projection.x(d.x(), d.y());
             double wy = projection.y(d.x(), d.y());
             Cell cell = d.kind().isBlocking() ? new Cell((int) Math.round(d.x()), (int) Math.round(d.y())) : null;
-            sprites.add(new DecorSprite(img, wx - w / 2, wy - h * anchorY, w, h, d.x() + d.y(), cell));
+            sprites.add(new DecorSprite(img, wx - w / 2, wy - h * anchorY, w, h, d.x() + d.y(), cell, wx, wy));
             if (d.kind().isLight()) lights.add(new Point2D.Double(wx, wy - h * anchorY + 10));
         }
         sprites.sort(Comparator.comparingDouble(o -> o.depth));
@@ -276,7 +306,7 @@ public final class BattleScene {
 
     /** Retire l'obstacle détruit de la case. */
     public void removeObstacle(Cell cell) {
-        sprites.removeIf(s -> cell.equals(s.cell));
+        if (sprites.removeIf(s -> cell.equals(s.cell)) && shadowAlpha > 0) buildGround();   // efface son ombre
     }
 
     public void addTrap(Trap trap) {
@@ -291,6 +321,7 @@ public final class BattleScene {
         for (DecorSprite s : sprites) s.shake = Math.max(0, s.shake - dt * 4);
         waterClock += dt;
         if (sky != null) sky.update(dt);
+        if (foreground != null) foreground.update(dt);
         particles.update(dt);
         for (FighterView v : views.values()) v.update(dt);
         effects.update(dt);
@@ -313,6 +344,16 @@ public final class BattleScene {
         }
 
         g.drawImage(ground, (int) Math.round(groundBounds.getX()), (int) Math.round(groundBounds.getY()), null);
+        if (shadowAlpha > 0) {
+            for (FighterView v : views.values()) {
+                FighterView.Silhouette sil = v.silhouette(poses);
+                if (sil == null) continue;
+                AffineTransform t = scaledAtFeet(g, v);
+                drawShadow(g, sil.image(), sil.x(), sil.y(), sil.w(), sil.h(), sil.feetX(), sil.feetY(),
+                        (float) (shadowAlpha * sil.alpha()));
+                g.setTransform(t);
+            }
+        }
         drawWaterShimmer(g);
         drawLights(g);
         drawHighlights(g, highlights);
@@ -343,9 +384,74 @@ public final class BattleScene {
 
         effects.drawWorld(g);
         g.setTransform(screen);
+        if (foreground != null) {
+            int n = arena.board().size();
+            Point2D.Double c = camera.toScreen(projection.x((n - 1) / 2.0, (n - 1) / 2.0), projection.y((n - 1) / 2.0, (n - 1) / 2.0));
+            foreground.draw(g, width, height, c.x - width / 2.0, c.y - height / 2.0, camera.zoom() / camera.fitZoom());
+        }
         particles.draw(g, width, height);
         effects.drawScreen(g, camera);
         drawPathLabel(g, camera, highlights);
+    }
+
+    /**
+     * Ombre portée d'un sprite posé au sol en ({@code fx}, {@code fy}) : sa silhouette floue, couchée dans la
+     * direction opposée au soleil (chaque point de hauteur h est décalé de h × (sunX, sunY)). L'ombre couchée
+     * est calculée une fois par image et par point d'appui, puis simplement copiée à l'échelle.
+     */
+    private void drawShadow(Graphics2D g, BufferedImage img, double x, double y, double w, double h,
+                            double fx, double fy, float alpha) {
+        if (alpha <= 0.01) return;
+        double k = w / img.getWidth();
+        double feetU = (fx - x) / k;
+        double feetV = (fy - y) / k;
+        String key = Math.round(feetU) + ":" + Math.round(feetV);
+        CastShadow cs = shadowCache.computeIfAbsent(img, i -> new LinkedHashMap<>())
+                .computeIfAbsent(key, kk -> castShadow(img, feetU, feetV));
+        Composite saved = g.getComposite();
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
+        g.drawImage(cs.image, (int) Math.round(fx + cs.offsetX * k), (int) Math.round(fy + cs.offsetY * k),
+                (int) Math.round(cs.image.getWidth() * k), (int) Math.round(cs.image.getHeight() * k), null);
+        g.setComposite(saved);
+    }
+
+    private static final int SHADOW_PAD = 4;
+
+    /** Ombre couchée prête à copier, et position de son coin par rapport au point d'appui (pixels source). */
+    private record CastShadow(BufferedImage image, double offsetX, double offsetY) { }
+
+    private CastShadow castShadow(BufferedImage img, double feetU, double feetV) {
+        BufferedImage sil = silhouetteOf(img);
+        // pixel (u, v) de la silhouette → (u - sunX (v - fv), -sunY (v - fv)) autour des pieds
+        AffineTransform t = new AffineTransform(1, 0, -sunX, -sunY, 0, 0);
+        t.translate(-SHADOW_PAD - feetU, -SHADOW_PAD - feetV);
+        Rectangle2D b = t.createTransformedShape(new Rectangle2D.Double(0, 0, sil.getWidth(), sil.getHeight())).getBounds2D();
+        BufferedImage out = Assets.createImage((int) Math.ceil(b.getWidth()) + 2, (int) Math.ceil(b.getHeight()) + 2);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        AffineTransform place = AffineTransform.getTranslateInstance(-b.getX() + 1, -b.getY() + 1);
+        place.concatenate(t);
+        g.drawImage(sil, place, null);
+        g.dispose();
+        return new CastShadow(out, b.getX() - 1, b.getY() - 1);
+    }
+
+    /** Silhouette sombre floutée (bords doux) d'une image, avec une marge pour le flou. */
+    private static BufferedImage silhouetteOf(BufferedImage img) {
+        int w = img.getWidth() + 2 * SHADOW_PAD;
+        int h = img.getHeight() + 2 * SHADOW_PAD;
+        BufferedImage flat = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int a = (img.getRGB(x, y) >>> 24);
+                if (a > 0) flat.setRGB(x + SHADOW_PAD, y + SHADOW_PAD, (a << 24) | 0x140C06);
+            }
+        }
+        float[] kernel = new float[25];
+        double[] g1 = {1, 4, 6, 4, 1};
+        for (int i = 0; i < 25; i++) kernel[i] = (float) (g1[i / 5] * g1[i % 5] / 256.0);
+        return new java.awt.image.ConvolveOp(new java.awt.image.Kernel(5, 5, kernel),
+                java.awt.image.ConvolveOp.EDGE_ZERO_FILL, null).filter(flat, null);
     }
 
     /** Réduit le dessin d'un combattant selon la profondeur (perspective) ; renvoie la transformation d'avant. */

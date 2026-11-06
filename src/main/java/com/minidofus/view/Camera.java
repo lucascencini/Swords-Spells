@@ -116,6 +116,11 @@ public final class Camera {
         return new Point2D.Double((sx - offsetX) / zoom, (sy - offsetY) / zoom);
     }
 
+    /** Zoom du cadrage initial (toute l'arène visible). */
+    public double fitZoom() {
+        return fitZoom;
+    }
+
     public double zoom() {
         return zoom;
     }

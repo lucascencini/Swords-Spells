@@ -16,6 +16,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.LinearGradientPaint;
 import java.awt.Rectangle;
 import java.awt.Shape;
@@ -259,18 +260,22 @@ public final class Hud {
         UiTheme.drawCentered(g, Math.max(0, v.shownHp()) + " / " + f.maxHp(), UiTheme.BODY_BOLD.deriveFont(10.5f),
                 tx + textW / 2.0, barY + 10, Color.WHITE);
 
-        // hors de son tour, on affiche ce dont le combattant disposera (ses PA/PM max), pas ses restes
-        g.setFont(UiTheme.BODY_BOLD.deriveFont(11f));
-        g.setColor(active ? UiTheme.PA_COLOR.brighter() : UiTheme.withAlpha(UiTheme.PA_COLOR.brighter(), 150));
-        g.drawString("PA " + (active ? f.pa() : f.fighterClass().maxPa()), tx, y + 55);
-        g.setColor(active ? UiTheme.PM_COLOR.brighter() : UiTheme.withAlpha(UiTheme.PM_COLOR.brighter(), 150));
-        g.drawString("PM " + (active ? f.pm() : f.fighterClass().maxPm()), tx + 44, y + 55);
+        // jauges de pastilles : pleines = restants, vides = dépensés ; hors de son tour, tout est plein
+        // (ce dont le combattant disposera), estompé
+        int maxPa = Math.max(f.fighterClass().maxPa(), f.pa());
+        int maxPm = Math.max(f.fighterClass().maxPm(), f.pm());
+        int pa = active ? f.pa() : maxPa;
+        int pm = active ? f.pm() : maxPm;
+        double pipY = y + 51;
+        double after = drawPips(g, tx, pipY, pa, maxPa, UiTheme.PA_COLOR, active);
+        after = drawPips(g, after + 7, pipY, pm, maxPm, UiTheme.PM_COLOR, active);
+        int pipsEnd = (int) Math.ceil(after);
         String controller = owner;
         g.setFont(UiTheme.BODY.deriveFont(10.5f));
         if (controller != null) {
             FontMetrics fm = g.getFontMetrics();
             String c = controller;
-            while (fm.stringWidth(c) > textW - 88 && c.length() > 3) c = c.substring(0, c.length() - 2) + "…";
+            while (fm.stringWidth(c) > tx + textW - pipsEnd - 6 && c.length() > 3) c = c.substring(0, c.length() - 2) + "…";
             g.setColor(UiTheme.GOLD_LIGHT);
             g.drawString(c, tx + textW - fm.stringWidth(c), y + 55);
         } else {
@@ -278,6 +283,40 @@ public final class Hud {
             g.drawString("Init. " + f.initiative(), tx + textW - 40, y + 55);
         }
         g.setComposite(saved);
+    }
+
+    /** Diamètre et pas des pastilles de PA/PM. */
+    private static final double PIP = 8;
+    private static final double PIP_STEP = 9.5;
+
+    /**
+     * Rangée de {@code max} pastilles dont {@code filled} pleines, centrées sur {@code cy}. Renvoie l'abscisse
+     * à droite de la dernière pastille.
+     */
+    private static double drawPips(Graphics2D g, double x, double cy, int filled, int max, Color color, boolean active) {
+        Object aa = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        int alpha = active ? 255 : 165;
+        for (int i = 0; i < max; i++) {
+            double px = x + i * PIP_STEP;
+            Ellipse2D.Double pip = new Ellipse2D.Double(px, cy - PIP / 2, PIP, PIP);
+            if (i < filled) {
+                g.setPaint(new GradientPaint((float) px, (float) (cy - PIP / 2), UiTheme.withAlpha(color.brighter(), alpha),
+                        (float) px, (float) (cy + PIP / 2), UiTheme.withAlpha(color.darker(), alpha)));
+                g.fill(pip);
+                g.setColor(UiTheme.withAlpha(Color.WHITE, active ? 150 : 90));
+                g.fill(new Ellipse2D.Double(px + 1.6, cy - PIP / 2 + 1.3, 2.6, 2));
+                g.setColor(UiTheme.withAlpha(color.darker().darker(), alpha));
+            } else {
+                g.setColor(new Color(0, 0, 0, 120));
+                g.fill(pip);
+                g.setColor(UiTheme.withAlpha(color, 110));
+            }
+            g.setStroke(new BasicStroke(1f));
+            g.draw(pip);
+        }
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
+        return x + (max - 1) * PIP_STEP + PIP;
     }
 
     /** Icônes des statuts actifs, alignées à droite à partir de {@code right}. */
