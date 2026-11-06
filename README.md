@@ -1,4 +1,4 @@
-# Swords & Spells — combat tactique isométrique
+# Spells & Swords — combat tactique isométrique
 
 Combat au tour par tour en équipes de 1 à 3 (Guerrier, Mage, Archère, Druide), sur une arène isométrique
 générée aléatoirement, à deux joueurs sur le même PC ou contre l'ordinateur (3 niveaux).
@@ -18,7 +18,7 @@ fournit le rendu, le son, et même la création d'un exécutable autonome.
 ## Lancer le jeu
 
 **Pour jouer tout de suite** : un JAR déjà compilé est fourni à la racine. Avec Java 17+ installé,
-double-cliquez sur `mini-dofus.jar` ou lancez `java -jar mini-dofus.jar`.
+double-cliquez sur `SpellsAndSwords.jar` ou lancez `java -jar SpellsAndSwords.jar`.
 
 Pour compiler : un **JDK 17 ou plus récent** (par exemple [Temurin 21](https://adoptium.net)).
 
@@ -26,7 +26,7 @@ Pour compiler : un **JDK 17 ou plus récent** (par exemple [Temurin 21](https://
 |---|---|---|
 | Compiler, tester, créer le JAR | `build.bat` | `./build.sh` |
 | … puis jouer | `build.bat run` | `./build.sh run` |
-| Application autonome (Java embarqué, ~85 Mo) | `build.bat package` → `build\dist\SwordsAndSpells\SwordsAndSpells.exe` | `./build.sh package` |
+| Application autonome (Java embarqué, ~85 Mo) | `build.bat package` → `build\dist\SpellsAndSwords\SpellsAndSwords.exe` | `./build.sh package` |
 
 Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur », « Jouer en ligne » ou
 « Deux joueurs », puis composez les équipes et la carte. Pour tester plus vite, des options lancent directement un combat :
@@ -37,7 +37,7 @@ Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur », «
 | `--ai easy\|normal\|hard` · `--ai-red …` | l'ordinateur joue l'équipe bleue (ou rouge) |
 | `--map forest\|ruins\|mountain\|desert\|arena` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
 
-Exemple : `java -jar build/mini-dofus.jar --red warrior,archer --blue mage,warrior --ai hard`.
+Exemple : `java -jar build/SpellsAndSwords.jar --red warrior,archer --blue mage,warrior --ai hard`.
 
 Pour travailler dans un IDE (IntelliJ IDEA, Eclipse, VS Code), ouvrez simplement le dossier :
 le `pom.xml` décrit le projet (structure Maven standard). Classe principale : `com.minidofus.Main`.
@@ -48,7 +48,7 @@ Jusqu'à 6 joueurs (3 contre 3) dans un salon : chacun prend une place et une cl
 jouées par l'ordinateur. Chrono par tour (30, 60 ou 90 s), chat (`Entrée` en combat) et reconnexion
 automatique en cas de coupure.
 
-- **Serveur permanent (VPS)** : `java -jar mini-dofus.jar --server [--port 7777] [--password secret]`, ou
+- **Serveur permanent (VPS)** : `java -jar SpellsAndSwords.jar --server [--port 7777] [--password secret]`, ou
   le script `deploy/install-server.sh`, qui l'installe comme service. Guide pas à pas pour un VPS IONOS :
   [docs/SERVEUR.md](docs/SERVEUR.md).
 - **Sans serveur** : « Jouer en ligne » → « Héberger sur ce PC » (réseau local, ou port 7777 ouvert sur la box).
@@ -89,7 +89,7 @@ le bandeau de tour montre cet ordre.
 | Classe | PV / PA / PM | Sorts |
 |---|---|---|
 | **Guerrier** (contrôle, corps à corps) | 100 / 6 / 3 | Frappe assommante (silence) · Coup de charge · Bouclier · Repousser · Grappin |
-| **Mage** (distance, mobilité) | 60 / 7 / 4 | Trait arcanique · Boule de feu (croix) · Soin (allié) · Téléportation · Poison |
+| **Mage** (distance, contrôle) | 60 / 7 / 4 | Trait arcanique · Boule de feu (croix) · Zone de glace (3×3, sol gelé 2 tours : dégâts et -2 PM) · Téléportation · Bouclier de pierre (bloque la prochaine attaque) |
 | **Archère** (longue portée, terrain) | 75 / 6 / 3 | Tir précis · Flèche de recul · Piège · Pluie de flèches (3×3) · Bond |
 | **Druide** (soutien, contrôle de zone) | 80 / 6 / 3 | Lancer de corbeau · Nuée d'abeilles (6 dégâts sur 3 tours) · Tornade (3×3, éjecte hors de la zone) · Éclair (sans ligne de vue) · Aqua vita (soin) |
 
@@ -251,6 +251,9 @@ Des outils de vérification visuelle, dans `src/test/java` :
 - `game.Snapshots` joue une partie ordinateur contre ordinateur hors écran et enregistre une capture à
   la première apparition de chaque sort, avec le temps de rendu moyen.
 - `WindowSmokeTest` ouvre la vraie fenêtre et la pilote avec de vrais clics et touches.
+- `model.BalanceSim` fait jouer l'ordinateur (Difficile contre Difficile) dans toutes les confrontations de
+  classes, en 1 contre 1 et en 2 contre 2, sur les 5 cartes, et affiche les taux de victoire :
+  `java -cp build/classes:build/test com.minidofus.model.BalanceSim 30`.
 - `OnlineSmokeTest` joue une partie en ligne dans la vraie fenêtre contre un joueur automatique : connexion,
   salon, chat, combat.
 - `MenuSmokeTest` parcourt les menus dans la vraie fenêtre : titre, configuration, combat, pause, retour.

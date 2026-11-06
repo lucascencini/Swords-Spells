@@ -219,6 +219,13 @@ public final class FighterView {
         }
         g.setTransform(saved);
         drawBees(g, assets, feet, true);
+        if (shows(StatusKind.STONE_SKIN) && shownHp > 0 && deathProgress == 0) {
+            BufferedImage rock = assets.image("fx/stone_1");
+            double rh = 30;
+            double rw = rh * rock.getWidth() / rock.getHeight();
+            double bob = Math.sin(clock * 2.4) * 3;
+            g.drawImage(rock, (int) Math.round(feet.x + 14), (int) Math.round(feet.y - 58 + bob), (int) Math.round(rw), (int) Math.round(rh), null);
+        }
         if (isShielded() && shownHp > 0) drawShieldBubble(g, feet);
         g.setComposite(savedComposite);
         if (shownHp > 0 && fade > 0.5) drawStatusBadges(g, feet.x, feet.y + y - 6);

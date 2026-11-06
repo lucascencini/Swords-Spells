@@ -65,7 +65,7 @@ public final class Main {
     }
 
     private static void open(MatchSetup setup) {
-        JFrame frame = new JFrame("Swords & Spells — Combat tactique");
+        JFrame frame = new JFrame("Spells & Swords — Combat tactique");
         GameView view = new GameView(setup, () -> frame.dispatchEvent(new WindowEvent(frame, WindowEvent.WINDOW_CLOSING)));
         frame.setContentPane(view);
         frame.setIconImage(new Assets().image("ui/portrait_warrior"));

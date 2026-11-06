@@ -340,6 +340,41 @@ public final class BattleScene {
         if (sprites.removeIf(s -> cell.equals(s.cell)) && shadowAlpha > 0) buildGround();   // efface son ombre
     }
 
+    /** Sol gelé d'une zone de glace (cases), affiché jusqu'à la fonte. */
+    public void addIceZone(Object zone, List<Cell> cells) {
+        iceZones.put(zone, new ArrayList<>(cells));
+    }
+
+    public void removeIceZone(Object zone) {
+        iceZones.remove(zone);
+    }
+
+    private final Map<Object, List<Cell>> iceZones = new LinkedHashMap<>();
+
+    /** Glace : cases bleutées qui scintillent, fissures et anneau de givre posés en perspective sur la zone. */
+    private void drawIceZones(Graphics2D g) {
+        if (iceZones.isEmpty()) return;
+        BufferedImage ring = assets.image("fx/ice_ground");
+        Composite saved = g.getComposite();
+        for (List<Cell> cells : iceZones.values()) {
+            double minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+            for (Cell c : cells) {
+                double pulse = 0.5 + 0.5 * Math.sin(waterClock * 2.2 + c.x() * 0.9 + c.y() * 1.3);
+                g.setColor(new Color(150, 210, 255, (int) (55 + 35 * pulse)));
+                g.fill(projection.cell(c.x(), c.y(), 1));
+                java.awt.geom.Rectangle2D b = projection.cell(c.x(), c.y(), 0).getBounds2D();
+                minX = Math.min(minX, b.getMinX());
+                minY = Math.min(minY, b.getMinY());
+                maxX = Math.max(maxX, b.getMaxX());
+                maxY = Math.max(maxY, b.getMaxY());
+            }
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.85f));
+            g.drawImage(ring, (int) Math.round(minX), (int) Math.round(minY), (int) Math.round(maxX - minX),
+                    (int) Math.round(maxY - minY), null);
+            g.setComposite(saved);
+        }
+    }
+
     public void addTrap(Trap trap) {
         traps.add(trap);
     }
@@ -388,6 +423,7 @@ public final class BattleScene {
         drawWaterShimmer(g);
         drawLights(g);
         drawHighlights(g, highlights);
+        drawIceZones(g);
         for (Trap t : traps) drawTrap(g, t);
         for (FighterView v : views.values()) {
             AffineTransform t = scaledAtFeet(g, v);

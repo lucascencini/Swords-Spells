@@ -170,8 +170,17 @@ public final class AiPlayer {
                     case POISON, BEES -> score -= sign * s.value() * s.turnsLeft() * 0.8;
                     case SILENCE -> score -= sign * 9;
                     case SHIELD -> score += sign * 4 * difficulty.threatWeight * 10;
+                    case STONE_SKIN -> score += sign * (8 + 6 * difficulty.threatWeight * 10);
                     default -> { }
                 }
+            }
+        }
+        // sol gelé : chaque ennemi du poseur qui s'y trouve encaissera dégâts et perte de PM à son tour
+        for (com.minidofus.model.IceZone z : b.iceZones()) {
+            for (Fighter f : b.fighters()) {
+                if (!f.isAlive() || !z.owner().isEnemyOf(f) || !z.contains(f.position())) continue;
+                double sign = f.team() == team ? 1 : -1;
+                score -= sign * (z.damage() + 4 * z.pmLoss());
             }
         }
         for (Fighter ally : b.team(team)) {
@@ -196,6 +205,7 @@ public final class AiPlayer {
             if (e.position().distanceTo(target.position()) <= reach) total += t[0];
         }
         if (target.hasShield()) total *= 0.5;
+        if (target.has(com.minidofus.model.StatusKind.STONE_SKIN)) total *= 0.45;
         return total;
     }
 

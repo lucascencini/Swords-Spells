@@ -26,6 +26,8 @@ public enum CastStyle {
     TORNADO,
     LIGHTNING,
     AQUA_VITA,
+    ICE_ZONE,
+    STONE_SHIELD,
     /** Choc contre un mur, un obstacle ou un combattant après une poussée. */
     COLLISION,
     /** Déclenchement d'un piège. */
@@ -33,5 +35,7 @@ public enum CastStyle {
     /** Dégâts de poison en début de tour. */
     POISON_TICK,
     /** Piqûres de la nuée d'abeilles en début de tour. */
-    BEES_TICK
+    BEES_TICK,
+    /** Morsure du sol gelé en début de tour. */
+    ICE_TICK
 }

@@ -93,6 +93,10 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         if (event instanceof BattleEvent.TrapPlaced e) return call(() -> scene.addTrap(e.trap()));
         if (event instanceof BattleEvent.TrapRemoved e) return call(() -> scene.removeTrap(e.trap()));
         if (event instanceof BattleEvent.TrapTriggered e) return trapTriggered(e);
+        if (event instanceof BattleEvent.IceZonePlaced e) return call(() -> scene.addIceZone(e.zone(), e.cells()));
+        if (event instanceof BattleEvent.IceZoneMelted e) return call(() -> scene.removeIceZone(e.zone()));
+        if (event instanceof BattleEvent.Chilled e) return chilled(e);
+        if (event instanceof BattleEvent.Blocked e) return blocked(e);
         if (event instanceof BattleEvent.BattleEnded e) return battleEnded(e);
         return call(() -> { });
     }
@@ -243,8 +247,15 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             case TORNADO -> sequence(face, tornado(target));
             case LIGHTNING -> sequence(face, delay(0.08), lightning(target));
             case AQUA_VITA -> sequence(face, aquaVita(target));
+            case ICE_ZONE -> sequence(face, iceZone(caster, target));
+            case STONE_SHIELD -> sequence(face, call(() -> {
+                Sfx.STONE.play(sound);
+                Point2D.Double p = cellPoint(target);
+                scene.effects().add(FrameEffect.once(frames("stone", 1), p.x + 20, p.y - 24, 40, 2, false).rise(10).fades(0.2, 0.15));
+                scene.effects().add(new RingPulse(p.x, p.y + 20, new Color(0xB8A890), 0.5));
+            }), delay(0.35));
             case TELEPORT, LEAP -> face;
-            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK -> call(() -> { });
+            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK, ICE_TICK -> call(() -> { });
         };
     }
 
@@ -262,6 +273,8 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             case TORNADO -> new Color(0x9BD48A);
             case LIGHTNING -> new Color(0xFFE680);
             case AQUA_VITA -> new Color(0x3FD0B0);
+            case ICE_ZONE -> new Color(0x9AD8FF);
+            case STONE_SHIELD -> new Color(0xC8B898);
             default -> null;
         };
     }
@@ -285,6 +298,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             Point2D.Double head = v.worldHead();
             Color color = e.style() == CastStyle.POISON_TICK ? UiTheme.POISON
                     : e.style() == CastStyle.BEES_TICK ? UiTheme.BEES
+                    : e.style() == CastStyle.ICE_TICK ? new Color(0x9AD8FF)
                     : e.heavy() ? UiTheme.DAMAGE_HEAVY : UiTheme.DAMAGE;
             String text = "-" + e.amount() + (e.style() == CastStyle.COLLISION ? " choc" : "");
             scene.effects().add(new FloatingText(text, head.x, head.y, color, e.heavy() ? 30 : 24));
@@ -310,6 +324,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
                 case SHIELD -> e.active() ? "Bouclier -50 %" : "Bouclier dissipé";
                 case POISON -> e.active() ? "Empoisonné" : null;
                 case BEES -> e.active() ? "Nuée d'abeilles" : null;
+                case STONE_SKIN -> e.active() ? "Bouclier de pierre" : null;
                 case SILENCE -> e.active() ? "Silence !" : null;
                 case SILENCE_IMMUNITY -> null;
             };
@@ -317,6 +332,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             Color color = switch (e.kind()) {
                 case POISON -> UiTheme.POISON;
                 case BEES -> UiTheme.BEES;
+                case STONE_SKIN -> new Color(0xD8C8A8);
                 case SILENCE -> UiTheme.SILENCE;
                 default -> UiTheme.SHIELD;
             };
@@ -393,6 +409,49 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         List<java.awt.image.BufferedImage> out = new ArrayList<>(count);
         for (int i = 1; i <= count; i++) out.add(assets.image("fx/" + prefix + "_" + i));
         return out;
+    }
+
+    /** Éclat de glace lancé au centre, l'orbe grandit en fissures, puis le sol se couvre de givre. */
+    private Animation iceZone(FighterView caster, Cell center) {
+        return sequence(defer(() -> {
+            Point2D.Double from = caster.worldFeet();
+            Point2D.Double to = cellPoint(center);
+            Projectile p = new Projectile(assets.image("fx/ice_shard"), from.x, from.y - 34, to.x, to.y + 10, 30, 0.7, true);
+            scene.effects().add(p);
+            return tween(0.32, p::setProgress);
+        }), call(() -> {
+            Sfx.ICE.play(sound);
+            Point2D.Double p = cellPoint(center);
+            double ground = p.y + 20;
+            scene.effects().add(FrameEffect.once(frames("ice_grow", 4), p.x, ground, 60, 14, false).fades(0, 0.08));
+            scene.effects().add(FrameEffect.once(frames("ice_burst", 4), p.x, ground + 26, 90, 9, true).delay(0.22).fades(0.05, 0.2));
+        }), delay(0.5));
+    }
+
+    /** Début de tour sur le sol gelé : givre et PM perdus. */
+    private Animation chilled(BattleEvent.Chilled e) {
+        return sequence(call(() -> {
+            FighterView v = view(e.fighter());
+            Sfx.ICE.play(sound);
+            Point2D.Double feet = v.worldFeet();
+            scene.effects().add(FrameEffect.once(frames("ice_burst", 4), feet.x, feet.y + 10, 46, 12, true).fades(0, 0.15));
+            if (e.pmLost() > 0) {
+                Point2D.Double head = v.worldHead();
+                scene.effects().add(new FloatingText("-" + e.pmLost() + " PM", head.x + 18, head.y + 10, UiTheme.PM_COLOR, 18));
+            }
+        }), delay(0.25));
+    }
+
+    /** Le bouclier de pierre encaisse le coup et vole en éclats. */
+    private Animation blocked(BattleEvent.Blocked e) {
+        return sequence(call(() -> {
+            FighterView v = view(e.target());
+            Sfx.SHATTER.play(sound);
+            Point2D.Double feet = v.worldFeet();
+            scene.effects().add(FrameEffect.once(frames("stone", 4).subList(1, 4), feet.x + 20, feet.y - 34, 44, 9, false).fades(0, 0.12));
+            Point2D.Double head = v.worldHead();
+            scene.effects().add(new FloatingText("Bloqué !", head.x, head.y, new Color(0xE8DCC0), 22));
+        }), delay(0.3));
     }
 
     /** Le corbeau s'envole du lanceur et pique sur la cible. */

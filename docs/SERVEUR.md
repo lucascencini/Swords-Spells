@@ -1,7 +1,7 @@
 # Jouer en ligne : installer le serveur
 
 Le jeu en ligne fonctionne avec un **serveur** auquel tous les joueurs se connectent. Le serveur, c'est le même fichier
-`mini-dofus.jar` lancé avec l'option `--server`. Il garde l'état de référence du combat, valide chaque action, joue les
+`SpellsAndSwords.jar` lancé avec l'option `--server`. Il garde l'état de référence du combat, valide chaque action, joue les
 places tenues par l'ordinateur et gère le chrono, le chat et les reconnexions.
 
 Deux façons de faire :
@@ -29,7 +29,7 @@ Dans le dossier du projet :
 build.bat
 ```
 
-Le fichier `build\mini-dofus.jar` est créé.
+Le fichier `build\SpellsAndSwords.jar` est créé.
 
 ### 1.2 Copier les fichiers sur le VPS
 
@@ -37,7 +37,7 @@ L'adresse IP du VPS et le mot de passe root se trouvent dans le Cloud Panel IONO
 Dans PowerShell, depuis le dossier du projet (remplace `IP` par l'adresse du VPS) :
 
 ```powershell
-scp build\mini-dofus.jar deploy\install-server.sh root@IP:/root/
+scp build\SpellsAndSwords.jar deploy\install-server.sh root@IP:/root/
 ```
 
 ### 1.3 Installer le service
@@ -49,7 +49,7 @@ ssh root@IP
 Puis, sur le VPS :
 
 ```bash
-bash install-server.sh mini-dofus.jar --password MonMotDePasse
+bash install-server.sh SpellsAndSwords.jar --password MonMotDePasse
 ```
 
 - `--password` est facultatif. Sans mot de passe, n'importe qui connaissant l'adresse peut entrer dans le salon.
@@ -76,7 +76,7 @@ Chaque joueur lance le jeu, clique sur **Jouer en ligne**, puis saisit :
 - **Mot de passe** : celui choisi à l'installation.
 
 > **Important : tout le monde doit avoir la même version du jeu.** Après chaque mise à jour, renvoie le nouveau
-> `mini-dofus.jar` à tes amis et mets aussi à jour le serveur (voir ci-dessous). Si les versions ne correspondent pas, la
+> `SpellsAndSwords.jar` à tes amis et mets aussi à jour le serveur (voir ci-dessous). Si les versions ne correspondent pas, la
 > connexion est refusée avec un message clair.
 
 ---
@@ -95,8 +95,8 @@ Toutes ces commandes se lancent sur le VPS (`ssh root@IP`).
 **Mettre à jour le jeu** : recopie le nouveau JAR et relance le script. Les réglages sont conservés.
 
 ```powershell
-scp build\mini-dofus.jar root@IP:/root/
-ssh root@IP "bash install-server.sh mini-dofus.jar"
+scp build\SpellsAndSwords.jar root@IP:/root/
+ssh root@IP "bash install-server.sh SpellsAndSwords.jar"
 ```
 
 **Changer le mot de passe** : modifie `SWORDS_PASSWORD=` dans `/etc/swords-spells.env` (avec `nano`), puis lance

@@ -39,4 +39,15 @@ public sealed interface BattleEvent {
     record TrapRemoved(Trap trap) implements BattleEvent { }
 
     record BattleEnded(Team winner) implements BattleEvent { }
+
+    /** Zone de glace posée (ou remplacée) ; {@code cells} : cases gelées. */
+    record IceZonePlaced(IceZone zone, List<Cell> cells) implements BattleEvent { }
+
+    record IceZoneMelted(IceZone zone) implements BattleEvent { }
+
+    /** Début de tour sur le sol gelé : PM perdus (les dégâts suivent dans un {@link Damaged}). */
+    record Chilled(Fighter fighter, int pmLost) implements BattleEvent { }
+
+    /** Attaque entièrement bloquée par le bouclier de pierre, qui se brise. */
+    record Blocked(Fighter target, Fighter source) implements BattleEvent { }
 }

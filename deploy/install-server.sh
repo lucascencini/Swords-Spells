@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Installe (ou met à jour) le serveur Swords & Spells sur un VPS Linux (Ubuntu ou Debian), en service systemd.
+# Installe (ou met à jour) le serveur Spells & Swords sur un VPS Linux (Ubuntu ou Debian), en service systemd.
 #
-#   sudo bash install-server.sh mini-dofus.jar            installation ou mise à jour
-#   sudo bash install-server.sh mini-dofus.jar --password monSecret   avec un mot de passe de serveur
+#   sudo bash install-server.sh SpellsAndSwords.jar            installation ou mise à jour
+#   sudo bash install-server.sh SpellsAndSwords.jar --password monSecret   avec un mot de passe de serveur
 #
 # Ce que fait le script :
 #   - installe Java (sans interface graphique) s'il manque ;
@@ -25,7 +25,7 @@ done
 
 if [ "$(id -u)" -ne 0 ]; then echo "À lancer en root (ou avec sudo)."; exit 1; fi
 if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
-  echo "Usage : sudo bash install-server.sh chemin/vers/mini-dofus.jar [--password secret] [--port 7777]"
+  echo "Usage : sudo bash install-server.sh chemin/vers/SpellsAndSwords.jar [--password secret] [--port 7777]"
   exit 1
 fi
 
@@ -52,7 +52,7 @@ fi
 echo "== Service systemd"
 cat > /etc/systemd/system/swords-spells.service <<UNIT
 [Unit]
-Description=Serveur de jeu Swords & Spells
+Description=Serveur de jeu Spells & Swords
 After=network-online.target
 Wants=network-online.target
 

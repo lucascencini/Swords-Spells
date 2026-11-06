@@ -43,4 +43,7 @@ public interface SpellContext {
     void addStatus(Fighter source, Fighter target, StatusKind kind, int turns, int value);
 
     void placeTrap(Fighter owner, Cell cell, IntRange damage, int maxPerOwner);
+
+    /** Gèle le sol en 3×3 autour de {@code center} (remplace la zone précédente du même poseur). */
+    void placeIceZone(Fighter owner, Cell center, int turns, int damage, int pmLoss);
 }
