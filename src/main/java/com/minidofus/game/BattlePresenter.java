@@ -254,8 +254,64 @@ final class BattlePresenter implements Consumer<BattleEvent> {
                 scene.effects().add(FrameEffect.once(frames("stone", 1), p.x + 20, p.y - 24, 40, 2, false).rise(10).fades(0.2, 0.15));
                 scene.effects().add(new RingPulse(p.x, p.y + 20, new Color(0xB8A890), 0.5));
             }), delay(0.35));
+            case FROST_BOLT, ICE_PRISON -> sequence(face, defer(() -> {
+                Point2D.Double from = caster.worldFeet();
+                Point2D.Double to = cellPoint(target);
+                Projectile p = new Projectile(assets.image("fx/ice_shard"), from.x, from.y - 34, to.x, to.y - 6, 18, 0.6, true);
+                scene.effects().add(p);
+                return tween(0.28, p::setProgress);
+            }), call(() -> {
+                Sfx.ICE.play(sound);
+                Point2D.Double p = cellPoint(target);
+                boolean prison = e.spell().style() == CastStyle.ICE_PRISON;
+                scene.effects().add(FrameEffect.once(frames("ice_burst", 4), p.x, p.y + 30, prison ? 70 : 44, 12, true).fades(0, 0.2));
+            }), delay(0.1));
+            case ARCANE_RAY -> sequence(face, call(() -> Sfx.PROJECTILE.play(sound)), defer(() -> {
+                List<Animation> beams = new ArrayList<>();
+                for (int i = 0; i < e.impact().size(); i++) {
+                    Cell c = e.impact().get(i);
+                    beams.add(sequence(delay(i * 0.045), call(() -> burst(c, "fx/arcane", 0.3, 0.8, 0.3, 0))));
+                }
+                return parallel(beams.toArray(Animation[]::new));
+            }), delay(0.2));
+            case OVERLOAD -> sequence(call(() -> {
+                Sfx.BUFF.play(sound);
+                Point2D.Double p = caster.worldFeet();
+                scene.effects().add(new RingPulse(p.x, p.y, new Color(0xC08CF0), 0.7));
+                scene.effects().add(new Burst(assets.image("fx/arcane"), p.x, p.y - 34, 0.3, 1.1, 0.5, 0));
+            }), delay(0.3));
+            case NOVA -> sequence(call(() -> {
+                Sfx.ICE.play(sound);
+                Sfx.FIREBALL_IMPACT.play(sound, 0.05);
+                Point2D.Double p = caster.worldFeet();
+                scene.effects().add(new RingPulse(p.x, p.y, new Color(0xF0A060), 0.6));
+                scene.effects().add(new RingPulse(p.x, p.y, new Color(0x9AD8FF), 0.8));
+                for (Cell c : e.impact()) {
+                    boolean fire = (c.x() + c.y()) % 2 == 0;
+                    if (fire) burst(c, "fx/fire_explosion", 0.2, 0.6, 0.35, 0.05);
+                    else {
+                        Point2D.Double q = cellPoint(c);
+                        scene.effects().add(FrameEffect.once(frames("ice_burst", 4), q.x, q.y + 30, 40, 12, true).delay(0.05).fades(0, 0.15));
+                    }
+                }
+            }), delay(0.35));
+            case METEOR -> sequence(face, defer(() -> {
+                Point2D.Double to = cellPoint(target);
+                Projectile p = new Projectile(assets.image("fx/fire_projectile"), to.x - 140, to.y - 420, to.x, to.y + 10, 0, 1.5, true);
+                scene.effects().add(p);
+                Sfx.FIREBALL.play(sound);
+                return tween(0.5, p::setProgress);
+            }), call(() -> {
+                Sfx.FIREBALL_IMPACT.play(sound);
+                Point2D.Double p = cellPoint(target);
+                scene.effects().add(new RingPulse(p.x, p.y + 20, new Color(0xFF8A3D), 0.8));
+                for (Cell c : e.impact()) {
+                    boolean center = c.equals(target);
+                    burst(c, "fx/fire_explosion", center ? 0.6 : 0.3, center ? 1.7 : 1.0, 0.5, center ? 0 : 0.04 * (Math.abs(c.x() - target.x()) + Math.abs(c.y() - target.y())));
+                }
+            }), delay(0.25));
             case TELEPORT, LEAP -> face;
-            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK, ICE_TICK -> call(() -> { });
+            case COLLISION, TRAP_TRIGGER, POISON_TICK, BEES_TICK, ICE_TICK, BURN_TICK -> call(() -> { });
         };
     }
 
@@ -275,6 +331,9 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             case AQUA_VITA -> new Color(0x3FD0B0);
             case ICE_ZONE -> new Color(0x9AD8FF);
             case STONE_SHIELD -> new Color(0xC8B898);
+            case FROST_BOLT, ICE_PRISON, NOVA -> new Color(0x9AD8FF);
+            case ARCANE_RAY, OVERLOAD -> new Color(0xB08CFF);
+            case METEOR -> new Color(0xFF8A3D);
             default -> null;
         };
     }
@@ -299,6 +358,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             Color color = e.style() == CastStyle.POISON_TICK ? UiTheme.POISON
                     : e.style() == CastStyle.BEES_TICK ? UiTheme.BEES
                     : e.style() == CastStyle.ICE_TICK ? new Color(0x9AD8FF)
+                    : e.style() == CastStyle.BURN_TICK ? new Color(0xFF8A3D)
                     : e.heavy() ? UiTheme.DAMAGE_HEAVY : UiTheme.DAMAGE;
             String text = "-" + e.amount() + (e.style() == CastStyle.COLLISION ? " choc" : "");
             scene.effects().add(new FloatingText(text, head.x, head.y, color, e.heavy() ? 30 : 24));
@@ -325,6 +385,10 @@ final class BattlePresenter implements Consumer<BattleEvent> {
                 case POISON -> e.active() ? "Empoisonné" : null;
                 case BEES -> e.active() ? "Nuée d'abeilles" : null;
                 case STONE_SKIN -> e.active() ? "Bouclier de pierre" : null;
+                case BURN -> e.active() ? "Brûlure" : null;
+                case CHILL -> e.active() ? "Ralenti" : null;
+                case ROOT -> e.active() ? "Immobilisé !" : null;
+                case EMPOWER -> e.active() ? "Surcharge +" + e.turns() : null;
                 case SILENCE -> e.active() ? "Silence !" : null;
                 case SILENCE_IMMUNITY -> null;
             };
@@ -333,6 +397,9 @@ final class BattlePresenter implements Consumer<BattleEvent> {
                 case POISON -> UiTheme.POISON;
                 case BEES -> UiTheme.BEES;
                 case STONE_SKIN -> new Color(0xD8C8A8);
+                case BURN -> new Color(0xFF8A3D);
+                case CHILL, ROOT -> new Color(0x9AD8FF);
+                case EMPOWER -> new Color(0xC08CF0);
                 case SILENCE -> UiTheme.SILENCE;
                 default -> UiTheme.SHIELD;
             };

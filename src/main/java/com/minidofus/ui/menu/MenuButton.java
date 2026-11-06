@@ -19,7 +19,7 @@ import java.awt.geom.RoundRectangle2D;
 /** Bouton de menu : libellé, sous-titre facultatif, style principal (doré) ou secondaire. */
 public final class MenuButton {
 
-    private final String label;
+    private String label;
     private final String subtitle;
     private final boolean primary;
     private final Runnable action;
@@ -31,6 +31,10 @@ public final class MenuButton {
         this.subtitle = subtitle;
         this.primary = primary;
         this.action = action;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
     }
 
     public void setBounds(int x, int y, int w, int h) {

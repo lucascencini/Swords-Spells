@@ -278,10 +278,10 @@ public final class BattleTests {
         Fighter w = s.add(FighterCatalog.WARRIOR, Team.BLUE, 8, 5);
         Battle b = s.start(8);
         Check.that(!b.canCast(spell(m, "stoneshield"), w.position()), "pas de bouclier de pierre sur un ennemi");
-        Check.that(b.cast(spell(m, "stoneshield"), ally.position()), "bouclier de pierre sur l'Archère");
+        Check.that(b.cast(spell(m, "stoneshield"), ally.position()), "bouclier de pierre sur l'Chasseur");
         b.endTurn();
         b.endTurn();
-        Check.that(b.cast(spell(w, "stun"), ally.position()), "le Guerrier frappe l'Archère protégée");
+        Check.that(b.cast(spell(w, "stun"), ally.position()), "le Guerrier frappe l'Chasseur protégée");
         Check.equal(75, ally.hp(), "attaque entièrement bloquée");
         Check.that(!ally.has(StatusKind.STONE_SKIN), "le bouclier s'est brisé");
         Check.equal(1L, s.count(BattleEvent.Blocked.class), "événement de blocage");
@@ -307,7 +307,7 @@ public final class BattleTests {
         Check.equal(before - 6, w.hp(), "6 dégâts au début du tour sur le sol gelé");
         Check.equal(w.fighterClass().maxPm() - 2, w.pm(), "2 PM de moins ce tour-là");
         Check.equal(1, b.iceZones().size(), "la glace persiste");
-        b.endTurn();                                    // Archère
+        b.endTurn();                                    // Chasseur
         b.endTurn();                                    // Mage : 1er tour écoulé
         Check.equal(1, b.iceZones().size(), "encore là au tour suivant du Mage");
         b.endTurn();
@@ -403,7 +403,7 @@ public final class BattleTests {
         Battle b4 = s4.start(8);
         a4.takeDamage(30);
         Check.that(!b4.canCast(spell(d4, "aquavita"), w4.position()), "pas de soin sur un ennemi");
-        Check.that(b4.cast(spell(d4, "aquavita"), a4.position()), "aqua vita sur l'Archère");
+        Check.that(b4.cast(spell(d4, "aquavita"), a4.position()), "aqua vita sur l'Chasseur");
         Check.inRange(a4.hp() - 45, 14, 20, "soin de 14 à 20 PV");
     }
 
@@ -482,7 +482,7 @@ public final class BattleTests {
         list.add(b1);
         list.add(b2);
         List<Fighter> order = Battle.computeTurnOrder(list);
-        Check.equal(List.of(r2, b1, r1, b2), order, "équipes alternées, la plus rapide (Archère 12) commence");
+        Check.equal(List.of(r2, b1, r1, b2), order, "équipes alternées, la plus rapide (Chasseur 12) commence");
 
         Board board = new Board(15);
         Battle b = new Battle(board, list, new Random(14));
@@ -512,7 +512,7 @@ public final class BattleTests {
         m.takeDamage(55);
         b.cast(spell(w, "stun"), m.position());
         Check.that(!m.isAlive(), "le mage tombe");
-        Check.that(!b.isOver(), "l'équipe bleue a encore l'Archère");
+        Check.that(!b.isOver(), "l'équipe bleue a encore l'Chasseur");
         Check.equal(1, w.stats().kills(), "statistique d'élimination");
         Check.equal(1L, s.count(BattleEvent.Died.class), "événement de mort");
         b.endTurn();

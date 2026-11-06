@@ -246,7 +246,7 @@ final class TurnController {
         Fighter f = battle.active();
         if (selected == null) {
             return f.pm() > 0
-                    ? "Cliquez sur une case verte pour vous déplacer, ou choisissez un sort (touches 1 à 5)"
+                    ? "Cliquez sur une case verte pour vous déplacer, ou choisissez un sort (touches 1 à " + f.fighterClass().spells().size() + ")"
                     : "Plus de PM : lancez un sort ou terminez votre tour (Espace)";
         }
         String base = switch (selected.targetMode()) {

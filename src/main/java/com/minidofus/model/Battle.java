@@ -31,6 +31,8 @@ public final class Battle implements SpellContext {
     private final List<Consumer<BattleEvent>> listeners = new ArrayList<>();
     private final List<Trap> traps = new ArrayList<>();
     private final List<IceZone> iceZones = new ArrayList<>();
+    /** Bonus du sort en cours (Surcharge) ; 1 hors sort. */
+    private double castBonus = 1;
     private List<Fighter> turnOrder = List.of();
     private int activeIndex;
     private int round;
@@ -198,7 +200,16 @@ public final class Battle implements SpellContext {
         caster.startCooldown(spell);
         caster.stats().addSpell();
         emit(new BattleEvent.SpellCast(caster, spell, target, impact));
+        // Surcharge : le prochain sort de dégâts est amplifié (le statut est consommé s'il a servi)
+        Status empower = spell.style() == CastStyle.OVERLOAD ? null : caster.status(StatusKind.EMPOWER);
+        castBonus = empower == null ? 1 : 1 + empower.value() / 100.0;
+        int dealtBefore = caster.stats().damageDealt();
         spell.apply(this, caster, target);
+        castBonus = 1;
+        if (empower != null && caster.stats().damageDealt() > dealtBefore) {
+            caster.removeStatus(StatusKind.EMPOWER);
+            emit(new BattleEvent.StatusChanged(caster, StatusKind.EMPOWER, false, 0));
+        }
         revision++;
         endTurnIfActiveDied();
         return true;
@@ -237,6 +248,8 @@ public final class Battle implements SpellContext {
                 if (poison != null) dealDamage(poison.source(), f, poison.value(), CastStyle.POISON_TICK);
                 Status bees = f.status(StatusKind.BEES);
                 if (bees != null && f.isAlive()) dealDamage(bees.source(), f, bees.value(), CastStyle.BEES_TICK);
+                Status burn = f.status(StatusKind.BURN);
+                if (burn != null && f.isAlive()) dealDamage(burn.source(), f, burn.value(), CastStyle.BURN_TICK);
             }
             if (isOver()) break;
             if (!f.isAlive()) {
@@ -250,6 +263,12 @@ public final class Battle implements SpellContext {
                     iceZones.remove(z);
                     emit(new BattleEvent.IceZoneMelted(z));
                 }
+            }
+            // ralenti / immobilisé : PM retirés pour ce tour
+            int slow = f.has(StatusKind.ROOT) ? f.pm() : f.has(StatusKind.CHILL) ? Math.min(f.pm(), f.status(StatusKind.CHILL).value()) : 0;
+            if (slow > 0) {
+                f.spendPm(slow);
+                emit(new BattleEvent.Chilled(f, slow));
             }
             IceZone ice = iceZoneAt(f.position());
             if (ice != null && ice.owner().isEnemyOf(f)) {
@@ -403,12 +422,19 @@ public final class Battle implements SpellContext {
     public void dealDamage(Fighter source, Fighter target, int raw, CastStyle style) {
         if (!target.isAlive() || isOver()) return;
         // le bouclier de pierre encaisse entièrement la prochaine attaque (pas les effets qui durent)
-        boolean attack = style != CastStyle.POISON_TICK && style != CastStyle.BEES_TICK && style != CastStyle.ICE_TICK;
+        boolean attack = style != CastStyle.POISON_TICK && style != CastStyle.BEES_TICK && style != CastStyle.ICE_TICK
+                && style != CastStyle.BURN_TICK;
         if (attack && raw > 0 && target.has(StatusKind.STONE_SKIN)) {
             target.removeStatus(StatusKind.STONE_SKIN);
             emit(new BattleEvent.Blocked(target, source));
             emit(new BattleEvent.StatusChanged(target, StatusKind.STONE_SKIN, false, 0));
             return;
+        }
+        // puissance du lanceur (niveau, talents, surcharge) et résistance de la cible ; les chocs n'en dépendent pas
+        if (source != null && style != CastStyle.COLLISION) {
+            double scaled = raw * source.fighterClass().power() * (source == active() ? castBonus : 1)
+                    * (1 - target.fighterClass().resist());
+            raw = Math.max(raw > 0 ? 1 : 0, (int) Math.round(scaled));
         }
         int dealt = target.takeDamage(raw);
         target.stats().addDamageTaken(dealt);
@@ -446,7 +472,7 @@ public final class Battle implements SpellContext {
     @Override
     public void heal(Fighter source, Fighter target, int amount) {
         if (!target.isAlive()) return;
-        int healed = target.heal(amount);
+        int healed = target.heal(source == null ? amount : (int) Math.round(amount * source.fighterClass().power()));
         if (source != null) source.stats().addHealing(healed);
         emit(new BattleEvent.Healed(source, target, healed, target.hp()));
     }

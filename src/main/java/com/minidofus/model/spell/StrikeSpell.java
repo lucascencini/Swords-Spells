@@ -37,10 +37,10 @@ public final class StrikeSpell extends AbstractSpell {
 
     @Override
     public String effectSummary() {
-        String s = damage + " dégâts";
+        String s = damage.scaled(powerMult()) + " dégâts";
         if (push > 0) s += ", repousse de " + push;
         if (silenceTurns > 0) s += ", silence " + silenceTurns + " tour";
-        return s;
+        return s + onHitSummary();
     }
 
     @Override
@@ -70,10 +70,10 @@ public final class StrikeSpell extends AbstractSpell {
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
         Fighter victim = ctx.fighterAt(target);
         if (victim == null) {
-            ctx.damageObstacle(caster, target, ctx.roll(damage), style());
+            ctx.damageObstacle(caster, target, rollDamage(ctx, damage), style());
             return;
         }
-        ctx.dealDamage(caster, victim, ctx.roll(damage), style());
+        hit(ctx, caster, victim, damage);
         if (!victim.isAlive()) return;
         if (silenceTurns > 0) ctx.addStatus(caster, victim, StatusKind.SILENCE, silenceTurns, 0);
         if (push > 0) {

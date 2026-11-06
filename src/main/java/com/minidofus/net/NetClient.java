@@ -48,11 +48,26 @@ public final class NetClient implements AutoCloseable {
     private volatile Status status = Status.CONNECTING;
     private volatile long lostAt;
 
+    /** Clé de compte (dérivée du mot de passe, vide = invité) et création de compte demandée. */
+    private final String accountKey;
+    /** « 1 » : créer le compte ; « 2 » : le créer s'il n'existe pas ; vide : connexion. */
+    private final String register;
+
     public NetClient(String host, int port, String name, String password) {
+        this(host, port, name, password, "", false);
+    }
+
+    public NetClient(String host, int port, String name, String password, String accountKey, boolean register) {
+        this(host, port, name, password, accountKey, register ? "1" : "");
+    }
+
+    public NetClient(String host, int port, String name, String password, String accountKey, String register) {
         this.host = host;
         this.port = port;
         this.name = name;
         this.password = password == null ? "" : password;
+        this.accountKey = accountKey == null ? "" : accountKey;
+        this.register = register == null ? "" : register;
     }
 
     /** Lance la connexion en arrière-plan. */
@@ -105,7 +120,9 @@ public final class NetClient implements AutoCloseable {
             s.setTcpNoDelay(true);
             socket = s;
             out = new BufferedWriter(new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8));
-            send(Message.of(Protocol.HELLO, Protocol.VERSION, name, password, token));
+            // une reconnexion (jeton connu) ne recrée jamais le compte
+            send(Message.of(Protocol.HELLO, Protocol.VERSION, name, password, token, accountKey,
+                    token.isEmpty() ? register : ""));
             Thread reader = new Thread(() -> readLoop(s), "client-lecture");
             reader.setDaemon(true);
             reader.start();

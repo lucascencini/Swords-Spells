@@ -27,7 +27,7 @@ public final class HealSpell extends AbstractSpell {
 
     @Override
     public String effectSummary() {
-        return "+" + amount + " PV";
+        return "+" + amount.scaled(powerMult()) + " PV";
     }
 
     @Override
@@ -44,6 +44,6 @@ public final class HealSpell extends AbstractSpell {
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
-        ctx.heal(caster, ctx.fighterAt(target), ctx.roll(amount));
+        ctx.heal(caster, ctx.fighterAt(target), rollDamage(ctx, amount));
     }
 }

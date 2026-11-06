@@ -56,6 +56,10 @@ public final class LobbyScreen implements Screen {
     private final Rectangle[] sizeBoxes = new Rectangle[3];
     private final Rectangle[] difficultyBoxes = new Rectangle[3];
     private final Rectangle[] timerBoxes = new Rectangle[4];
+    private final Rectangle[] levelBoxes = new Rectangle[2];
+    /** Personnages du compte connecté (« char:id ») et leurs libellés : proposés avant les classes sur ses places. */
+    private List<String> myChoices = List.of();
+    private List<String> myChoiceLabels = List.of();
     private Rectangle mapPrev = new Rectangle();
     private Rectangle mapNext = new Rectangle();
     private Rectangle panel = new Rectangle();
@@ -82,6 +86,18 @@ public final class LobbyScreen implements Screen {
     /** Adresse à communiquer aux amis, affichée en haut du salon. */
     public void setServerLabel(String label) {
         this.serverLabel = label;
+    }
+
+    /** Personnages du compte : identifiants et libellés (« Merlin — Mage niv. 12 »). */
+    public void setCharacters(List<String> ids, List<String> labels) {
+        List<String> c = new ArrayList<>();
+        for (String id : ids) c.add("char:" + id);
+        myChoices = c;
+        myChoiceLabels = List.copyOf(labels);
+    }
+
+    public void setLeaveLabel(String label) {
+        leave.setLabel(label);
     }
 
     public void setInfo(String info) {
@@ -129,7 +145,7 @@ public final class LobbyScreen implements Screen {
         int left = panel.x + 30;
         int contentW = panel.width - 330 - 60;
         drawSettings(g, left, panel.y + 92, contentW);
-        drawTeams(g, left, panel.y + 214, contentW);
+        drawTeams(g, left, panel.y + 232, contentW);
         drawSide(g, panel.x + panel.width - 330, panel.y + 24, 300);
         leave.draw(g, mouseX, mouseY);
         start.setEnabled(isChef());
@@ -172,11 +188,15 @@ public final class LobbyScreen implements Screen {
         segments(g, sizeBoxes, new String[] {"1 c. 1", "2 c. 2", "3 c. 3"}, state.teamSize - 1, x + 90, y + 44, w / 2 - 110, chef);
         String[] diff = {Difficulty.EASY.displayName(), Difficulty.NORMAL.displayName(), Difficulty.HARD.displayName()};
         segments(g, difficultyBoxes, diff, state.difficulty.ordinal(), x + w / 2 + 90, y + 44, w / 2 - 90, chef);
-        if (!chef) {
-            g.setFont(UiTheme.BODY.deriveFont(11.5f));
-            g.setColor(UiTheme.TEXT_DIM);
-            g.drawString("Seul le chef du salon modifie les réglages.", x, y + 104);
-        }
+        g.setFont(UiTheme.BODY_BOLD.deriveFont(13.5f));
+        g.setColor(UiTheme.PARCHMENT);
+        g.drawString("Niveaux", x, y + 110);
+        segments(g, levelBoxes, new String[] {"Réels", "Égalisés"}, state.equalLevels ? 1 : 0, x + 90, y + 88, w / 2 - 110, chef);
+        g.setFont(UiTheme.BODY.deriveFont(11.5f));
+        g.setColor(UiTheme.TEXT_DIM);
+        g.drawString(state.equalLevels ? "Tous les combattants au niveau du plus haut personnage (talents conservés)."
+                : "Chaque personnage combat à son vrai niveau.", x + w / 2 + 10, y + 103);
+        if (!chef) g.drawString("Seul le chef du salon modifie les réglages.", x + w / 2 + 10, y + 119);
     }
 
     private void segments(Graphics2D g, Rectangle[] boxes, String[] labels, int selected, int x, int y, int w, boolean active) {
@@ -243,7 +263,10 @@ public final class LobbyScreen implements Screen {
             UiTheme.drawCentered(g, "‹", UiTheme.TITLE.deriveFont(22f), r.x + 13, r.y + 52, UiTheme.GOLD_LIGHT);
             UiTheme.drawCentered(g, "›", UiTheme.TITLE.deriveFont(22f), r.x + r.width - 13, r.y + 52, UiTheme.GOLD_LIGHT);
         }
-        UiTheme.drawCentered(g, c.displayName(), UiTheme.TITLE.deriveFont(15f), r.getCenterX(), r.y + 96, UiTheme.PARCHMENT);
+        String title = state.slotLabel[slot].isEmpty() ? c.displayName() : state.slotLabel[slot];
+        java.awt.Font tf = UiTheme.TITLE.deriveFont(15f);
+        while (g.getFontMetrics(tf).stringWidth(title) > r.width - 8 && tf.getSize2D() > 10) tf = tf.deriveFont(tf.getSize2D() - 1);
+        UiTheme.drawCentered(g, title, tf, r.getCenterX(), r.y + 96, state.slotLabel[slot].isEmpty() ? UiTheme.PARCHMENT : UiTheme.GOLD_LIGHT);
         String ownerName = state.ownerName(slot);
         LobbyState.Player p = state.player(owner);
         String who = ownerName == null ? "Ordinateur (" + state.difficulty.displayName().toLowerCase() + ")"
@@ -337,9 +360,13 @@ public final class LobbyScreen implements Screen {
             if (canEditClass(slot) && state.isUsed(slot)) {
                 int step = classPrev.get(i).contains(x, y) ? -1 : classNext.get(i).contains(x, y) ? 1 : 0;
                 if (step != 0) {
-                    int idx = FighterCatalog.ALL.indexOf(FighterCatalog.byId(state.slotClass[slot]));
-                    String next = FighterCatalog.ALL.get(Math.floorMod(idx + step, FighterCatalog.ALL.size())).id();
-                    send.accept(Message.of(Protocol.CLASS, slot, next));
+                    List<String> options = new ArrayList<>();
+                    if (state.slotOwner[slot] == myId) options.addAll(myChoices);
+                    for (FighterClass fc : FighterCatalog.ALL) options.add(fc.id());
+                    String current = state.slotChar[slot].isEmpty() ? state.slotClass[slot] : "char:" + state.slotChar[slot];
+                    int idx = Math.max(0, options.indexOf(current));
+                    if (!options.contains(current) && step < 0) idx = 0;
+                    send.accept(Message.of(Protocol.CLASS, slot, options.get(Math.floorMod(idx + step, options.size()))));
                     return;
                 }
             }
@@ -349,7 +376,11 @@ public final class LobbyScreen implements Screen {
         int size = state.teamSize;
         Difficulty diff = state.difficulty;
         int timer = state.turnSeconds;
+        boolean equal = state.equalLevels;
         boolean changed = false;
+        for (int i = 0; i < 2; i++) {
+            if (levelBoxes[i] != null && levelBoxes[i].contains(x, y)) { equal = i == 1; changed = true; }
+        }
         if (mapPrev.contains(x, y) || mapNext.contains(x, y)) {
             int count = MapTheme.values().length + 1;
             int idx = map == null ? 0 : map.ordinal() + 1;
@@ -364,7 +395,10 @@ public final class LobbyScreen implements Screen {
         for (int i = 0; i < 4; i++) {
             if (timerBoxes[i] != null && timerBoxes[i].contains(x, y)) { timer = LobbyState.TIMER_CHOICES[i]; changed = true; }
         }
-        if (changed) send.accept(Message.of(Protocol.SETTINGS, map == null ? "random" : map.name(), size, diff.name(), timer));
+        if (changed) {
+            send.accept(Message.of(Protocol.SETTINGS, map == null ? "random" : map.name(), size, diff.name(), timer,
+                    equal ? "EQUAL" : "REAL"));
+        }
     }
 
     @Override

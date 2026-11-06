@@ -15,9 +15,11 @@ public final class AllTests {
         BattleTests.run();
         MapTests.run();
         com.minidofus.view.ProjectionTests.run();
+        com.minidofus.model.progression.ProgressionTests.run();
         AiTests.run();
         CommandTests.run();
         NetTests.run();
+        com.minidofus.net.AccountTests.run();
         System.exit(Check.report());
     }
 }

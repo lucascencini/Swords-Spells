@@ -197,6 +197,15 @@ public final class FighterView {
 
         if (castGlow > 0 && shownHp > 0) drawCastAura(g, feet, cast);
         drawBees(g, assets, feet, false);
+        if ((shows(StatusKind.ROOT) || shows(StatusKind.CHILL)) && shownHp > 0 && deathProgress == 0) {
+            BufferedImage ice = assets.image(shows(StatusKind.ROOT) ? "fx/ice_burst_4" : "fx/ice_burst_3");
+            double iw = shows(StatusKind.ROOT) ? 56 : 44;
+            double ih = iw * ice.getHeight() / ice.getWidth();
+            Composite c0 = g.getComposite();
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.8f));
+            g.drawImage(ice, (int) Math.round(feet.x - iw / 2), (int) Math.round(feet.y - ih * 0.75), (int) Math.round(iw), (int) Math.round(ih), null);
+            g.setComposite(c0);
+        }
 
         AffineTransform saved = g.getTransform();
         Composite savedComposite = g.getComposite();
@@ -221,10 +230,16 @@ public final class FighterView {
         drawBees(g, assets, feet, true);
         if (shows(StatusKind.STONE_SKIN) && shownHp > 0 && deathProgress == 0) {
             BufferedImage rock = assets.image("fx/stone_1");
-            double rh = 30;
+            // rocher qui flotte au-dessus de la tête, halo doré pour bien le voir
+            double rh = 40;
             double rw = rh * rock.getWidth() / rock.getHeight();
             double bob = Math.sin(clock * 2.4) * 3;
-            g.drawImage(rock, (int) Math.round(feet.x + 14), (int) Math.round(feet.y - 58 + bob), (int) Math.round(rw), (int) Math.round(rh), null);
+            double cy = feet.y - 98 - hop + bob;
+            float glow = (float) (0.55 + 0.25 * Math.sin(clock * 3));
+            g.setPaint(new RadialGradientPaint((float) feet.x, (float) cy, 30f, new float[] {0f, 1f},
+                    new Color[] {new Color(255, 225, 160, (int) (150 * glow)), new Color(255, 225, 160, 0)}));
+            g.fill(new Ellipse2D.Double(feet.x - 30, cy - 30, 60, 60));
+            g.drawImage(rock, (int) Math.round(feet.x - rw / 2), (int) Math.round(cy - rh / 2), (int) Math.round(rw), (int) Math.round(rh), null);
         }
         if (isShielded() && shownHp > 0) drawShieldBubble(g, feet);
         g.setComposite(savedComposite);

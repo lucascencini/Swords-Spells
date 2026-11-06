@@ -79,19 +79,26 @@ public final class Hud {
     public void layout(int w, int h, int spellCount) {
         width = w;
         height = h;
-        int total = BUTTON_W * (spellCount + 1) + GAP * spellCount + 18 + END_W;
+        // jusqu'à 9 sorts (8 + ultime) : les boutons rétrécissent si la fenêtre est étroite
+        int bw = Math.max(52, Math.min(BUTTON_W, (w - 60 - GAP * spellCount - 18 - END_W) / (spellCount + 1)));
+        int total = bw * (spellCount + 1) + GAP * spellCount + 18 + END_W;
         int x = (w - total) / 2;
         int y = h - BUTTON_H - 16;
         bar = new Rectangle(x - 12, y - 10, total + 24, BUTTON_H + 20);
-        moveButton = new Rectangle(x, y, BUTTON_W, BUTTON_H);
+        moveButton = new Rectangle(x, y, bw, BUTTON_H);
         spellButtons.clear();
         for (int i = 0; i < spellCount; i++) {
-            spellButtons.add(new Rectangle(x + (BUTTON_W + GAP) * (i + 1), y, BUTTON_W, BUTTON_H));
+            spellButtons.add(new Rectangle(x + (bw + GAP) * (i + 1), y, bw, BUTTON_H));
         }
         endButton = new Rectangle(x + total - END_W, y, END_W, BUTTON_H);
         muteButton = new Rectangle(w - 46, h - 44, 30, 30);
         replayButton = new Rectangle(w / 2 - 170, h / 2 + 56, 160, 40);
         newMapButton = new Rectangle(w / 2 + 10, h / 2 + 56, 160, 40);
+    }
+
+    /** Nombre de sorts pour lequel la barre est disposée. */
+    public int spellSlots() {
+        return spellButtons.size();
     }
 
     public void setMouse(int x, int y) {
@@ -329,6 +336,18 @@ public final class Hud {
         }
         if (v.shows(StatusKind.POISON)) {
             statusDot(g, x, top, UiTheme.POISON, "P");
+            x -= 17;
+        }
+        if (v.shows(StatusKind.BURN)) {
+            statusDot(g, x, top, new Color(0xFF8A3D), "B");
+            x -= 17;
+        }
+        if (v.shows(StatusKind.ROOT) || v.shows(StatusKind.CHILL)) {
+            statusDot(g, x, top, new Color(0x9AD8FF), "G");
+            x -= 17;
+        }
+        if (v.shows(StatusKind.EMPOWER)) {
+            statusDot(g, x, top, new Color(0xC08CF0), "+");
             x -= 17;
         }
         if (v.shows(StatusKind.STONE_SKIN)) {
@@ -668,7 +687,8 @@ public final class Hud {
         List<FighterView> views = m.fighterViews();
         int rowH = 34;
         int w = Math.min(width - 40, 660);
-        int h = 112 + 26 + views.size() * rowH + 74;
+        List<String> rewards = m.rewardLines();
+        int h = 112 + 26 + views.size() * rowH + 74 + (rewards.isEmpty() ? 0 : 18 + rewards.size() * 22);
         int x = (width - w) / 2;
         int y = Math.max(20, (height - h) / 2);
         UiTheme.panel(g, x, y, w, h, 18, true);
@@ -734,12 +754,23 @@ public final class Hud {
                         tx + nameW + i * 74 + 37, ry + 21, values[i] == 0 ? UiTheme.TEXT_DIM : UiTheme.PARCHMENT);
             }
         }
+        if (!rewards.isEmpty()) {
+            int ry = ty + 10 + views.size() * rowH + 26;
+            g.setColor(UiTheme.withAlpha(UiTheme.GOLD, 90));
+            g.drawLine(x + 40, ry - 18, x + w - 40, ry - 18);
+            for (String line : rewards) {
+                boolean up = line.contains("niveau");
+                UiTheme.drawOutlinedCentered(g, line, UiTheme.BODY_BOLD.deriveFont(up ? 15f : 14f), width / 2.0, ry,
+                        up ? UiTheme.GOLD_LIGHT : UiTheme.PARCHMENT, new Color(0, 0, 0, 160));
+                ry += 22;
+            }
+        }
         int by = y + h - 58;
         if (m.online()) {
             replayButton = new Rectangle();
             newMapButton = new Rectangle();
-            menuButton = new Rectangle(width / 2 - 110, by, 220, 40);
-            drawPlainButton(g, menuButton, "Retour au salon (Échap)", UiTheme.GOLD);
+            menuButton = new Rectangle(width / 2 - 140, by, 280, 40);
+            drawPlainButton(g, menuButton, m.backLabel(), UiTheme.GOLD);
         } else {
             replayButton = new Rectangle(width / 2 - 250, by, 160, 40);
             newMapButton = new Rectangle(width / 2 - 80, by, 160, 40);

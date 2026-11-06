@@ -18,7 +18,7 @@ import java.util.List;
 public final class AreaStrikeSpell extends AbstractSpell {
 
     /** Forme de la zone. */
-    public enum Shape { CROSS, SQUARE }
+    public enum Shape { CROSS, SQUARE, LARGE }
 
     private final IntRange damage;
     private final Shape shape;
@@ -42,8 +42,20 @@ public final class AreaStrikeSpell extends AbstractSpell {
 
     @Override
     public String effectSummary() {
-        return damage + " dégâts en " + (shape == Shape.CROSS ? "croix" : "carré 3×3") + " (alliés compris)"
-                + (pushOut > 0 ? ", repousse hors de la zone" : "");
+        String zone = switch (shape()) {
+            case CROSS -> "croix";
+            case SQUARE -> "carré 3×3";
+            case LARGE -> "grande zone (rayon 2)";
+        };
+        return damage.scaled(powerMult()) + " dégâts en " + zone + " (alliés compris)"
+                + (pushOut > 0 ? ", repousse hors de la zone" : "") + onHitSummary();
+    }
+
+    /** Forme effective : un talent peut élargir la croix en carré, et le carré en grande zone. */
+    private Shape shape() {
+        int up = param("area");
+        if (up <= 0) return shape;
+        return Shape.values()[Math.min(Shape.values().length - 1, shape.ordinal() + up)];
     }
 
     @Override
@@ -53,10 +65,13 @@ public final class AreaStrikeSpell extends AbstractSpell {
 
     @Override
     public List<Cell> impactCells(SpellContext ctx, Fighter caster, Cell target) {
-        List<Cell> cells = new ArrayList<>(9);
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                if (shape == Shape.CROSS && dx != 0 && dy != 0) continue;
+        List<Cell> cells = new ArrayList<>(13);
+        Shape sh = shape();
+        int r = sh == Shape.LARGE ? 2 : 1;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                if (sh == Shape.CROSS && dx != 0 && dy != 0) continue;
+                if (sh == Shape.LARGE && Math.abs(dx) + Math.abs(dy) > 2) continue;
                 Cell c = target.plus(dx, dy);
                 if (ctx.board().inBounds(c)) cells.add(c);
             }
@@ -70,10 +85,10 @@ public final class AreaStrikeSpell extends AbstractSpell {
         for (Cell cell : impactCells(ctx, caster, target)) {
             Fighter victim = ctx.fighterAt(cell);
             if (victim != null && victim != caster) {
-                ctx.dealDamage(caster, victim, ctx.roll(damage), style());
+                hit(ctx, caster, victim, damage);
                 if (victim.isAlive()) hit.add(victim);
             } else if (victim == null && ctx.board().isDestructible(cell)) {
-                ctx.damageObstacle(caster, cell, ctx.roll(damage), style());
+                ctx.damageObstacle(caster, cell, rollDamage(ctx, damage), style());
             }
         }
         if (pushOut <= 0) return;

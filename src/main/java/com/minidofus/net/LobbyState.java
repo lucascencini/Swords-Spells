@@ -29,6 +29,13 @@ public final class LobbyState {
     public int turnSeconds = 60;    // 0 = pas de chrono
     public final String[] slotClass = {"warrior", "archer", "mage", "mage", "warrior", "archer"};
     public final int[] slotOwner = {-1, -1, -1, -1, -1, -1};
+    /** Personnage posé sur la place (identifiant, vide sinon) et son libellé (« Nom niv. 12 »). */
+    public final String[] slotChar = {"", "", "", "", "", ""};
+    public final String[] slotLabel = {"", "", "", "", "", ""};
+    /** Niveaux égalisés : tous les combattants au niveau du plus haut (talents gardés). */
+    public boolean equalLevels;
+    /** Joueurs occupés par un combat solo. */
+    public final java.util.Set<Integer> solo = new java.util.TreeSet<>();
     public final List<Player> players = new ArrayList<>();
     public int chefId = -1;
     public boolean inMatch;
@@ -78,6 +85,16 @@ public final class LobbyState {
             if (i > 0) sb.append('|');
             sb.append(p.id()).append(':').append(p.connected() ? 1 : 0).append(':').append(clean(p.name()));
         }
+        sb.append(';').append(equalLevels ? 1 : 0).append(';');
+        for (int i = 0; i < SLOTS; i++) sb.append(i > 0 ? "," : "").append(slotChar[i]);
+        sb.append(';');
+        for (int i = 0; i < SLOTS; i++) sb.append(i > 0 ? "," : "").append(clean(slotLabel[i]));
+        sb.append(';');
+        boolean first = true;
+        for (int id : solo) {
+            sb.append(first ? "" : ",").append(id);
+            first = false;
+        }
         return sb.toString();
     }
 
@@ -99,6 +116,14 @@ public final class LobbyState {
                 String[] q = p.split(":", 3);
                 s.players.add(new Player(Integer.parseInt(q[0]), q[2], "1".equals(q[1])));
             }
+        }
+        if (f.length > 12) {
+            s.equalLevels = "1".equals(f[9]);
+            String[] chars = f[10].split(",", -1);
+            String[] labels = f[11].split(",", -1);
+            for (int i = 0; i < SLOTS && i < chars.length; i++) s.slotChar[i] = chars[i];
+            for (int i = 0; i < SLOTS && i < labels.length; i++) s.slotLabel[i] = labels[i];
+            if (!f[12].isEmpty()) for (String id : f[12].split(",")) s.solo.add(Integer.parseInt(id));
         }
         return s;
     }

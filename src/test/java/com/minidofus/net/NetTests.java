@@ -35,10 +35,23 @@ public final class NetTests {
         boolean autoplay;
         int sentFor = -1;
 
+        String accountJson;
+        final List<String> rewards = new ArrayList<>();
+
         Bot(int port, String name, String password) {
+            this(new NetClient("127.0.0.1", port, name, password), name);
+        }
+
+        Bot(NetClient net, String name) {
             this.name = name;
-            this.net = new NetClient("127.0.0.1", port, name, password);
+            this.net = net;
             net.start();
+        }
+
+        /** Joueur avec un compte (création ou connexion). */
+        static Bot account(int port, String name, String accountPassword, boolean register) {
+            return new Bot(new NetClient("127.0.0.1", port, name, "",
+                    com.minidofus.server.AccountStore.clientKey(name, accountPassword), register), name);
         }
 
         void pump() {
@@ -56,6 +69,8 @@ public final class NetTests {
                         sentFor = -1;
                     }
                     case Protocol.SYNCED -> synced = true;
+                    case Protocol.ACCOUNT -> accountJson = m.arg(0);
+                    case Protocol.REWARD -> rewards.add(m.arg(0));
                     case Protocol.CMD -> {
                         if (match != null && match.apply(m) == MatchReplica.Result.DESYNC) {
                             desyncs++;
@@ -81,7 +96,7 @@ public final class NetTests {
         }
     }
 
-    private static boolean await(List<Bot> bots, BooleanSupplier condition, long timeoutMs) {
+    static boolean await(List<Bot> bots, BooleanSupplier condition, long timeoutMs) {
         long end = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < end) {
             for (Bot b : bots) b.pump();
@@ -128,7 +143,7 @@ public final class NetTests {
         Check.suite("Réseau : accès au serveur");
         Bot wrong = new Bot(port, "Intrus", "mauvais");
         Check.that(await(List.of(wrong), () -> wrong.net.status() == NetClient.Status.CLOSED, 5000), "mauvais mot de passe : connexion fermée");
-        Check.equal("Mot de passe incorrect", wrong.rejected, "raison affichée");
+        Check.equal("Mot de passe du serveur incorrect", wrong.rejected, "raison affichée");
         Bot a = new Bot(port, "Lucas", "secret");
         Check.that(await(List.of(a), () -> a.lobby != null, 5000), "bon mot de passe : salon reçu");
         Bot twin = new Bot(port, "lucas", "secret");
