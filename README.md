@@ -1,6 +1,7 @@
-# Mini Dofus — combat tactique isométrique
+# Swords & Spells — combat tactique isométrique
 
-Duel au tour par tour Guerrier contre Mage, sur une arène isométrique générée aléatoirement.
+Combat au tour par tour en équipes de 1 à 3 (Guerrier, Mage, Archère), sur une arène isométrique
+générée aléatoirement, à deux joueurs sur le même PC ou contre l'ordinateur (3 niveaux).
 Application de bureau en **Java 17+ (Swing / Java2D)**, sans aucune dépendance externe : le JDK
 fournit le rendu, le son, et même la création d'un exécutable autonome.
 
@@ -23,8 +24,15 @@ Pour compiler : un **JDK 17 ou plus récent** (par exemple [Temurin 21](https://
 | … puis jouer | `build.bat run` | `./build.sh run` |
 | Application autonome (Java embarqué, ~85 Mo) | `build.bat package` → `build\dist\MiniDofus\MiniDofus.exe` | `./build.sh package` |
 
-Le JAR seul se lance avec `java -jar build/mini-dofus.jar`. Options : `--map forest|ruins|lake` et
-`--seed 1234` pour rejouer exactement la même carte.
+Le JAR seul se lance avec `java -jar build/mini-dofus.jar`. Options :
+
+| Option | Effet |
+|---|---|
+| `--red warrior,archer` · `--blue mage,mage,warrior` | composition des équipes (1 à 3 parmi `warrior`, `mage`, `archer`) |
+| `--ai easy\|normal\|hard` · `--ai-red …` | l'ordinateur joue l'équipe bleue (ou rouge) |
+| `--map forest\|ruins\|lake` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
+
+Exemple : `java -jar build/mini-dofus.jar --red warrior,archer --blue mage,warrior --ai hard`.
 
 Pour travailler dans un IDE (IntelliJ IDEA, Eclipse, VS Code), ouvrez simplement le dossier :
 le `pom.xml` décrit le projet (structure Maven standard). Classe principale : `com.minidofus.Main`.
@@ -34,26 +42,60 @@ le `pom.xml` décrit le projet (structure Maven standard). Classe principale : `
 | Action | Souris | Clavier |
 |---|---|---|
 | Se déplacer | clic sur une case verte (le chemin et son coût s'affichent au survol) | `D` : mode déplacement |
-| Choisir un sort | clic sur le bouton | `1`, `2`, `3` |
-| Lancer un sort personnel (bouclier, soin) | clic sur son personnage ou second clic sur le bouton | même touche une seconde fois |
+| Choisir un sort | clic sur le bouton (info-bulle au survol) | `1` à `5` |
+| Lancer le bouclier | clic sur son personnage ou second clic sur le bouton | même touche une seconde fois |
 | Annuler le sort sélectionné | clic droit, ou clic hors des cases valides | `Échap` |
 | Fin du tour | bouton vert | `Espace` ou `Entrée` |
 | Caméra | molette : zoom · clic droit glissé : déplacement | `C` : recentrer |
 | Divers | icône haut-parleur | `M` : son · `F3` : images/s · `R` / `N` en fin de partie |
 
+## Règles
+
+Chaque combattant a des **PA** (points d'action, pour les sorts) et des **PM** (points de mouvement),
+rendus au début de son tour. L'**ordre de jeu** est fixé au début du combat : chaque équipe est
+triée par initiative (base de la classe + tirage), puis les équipes jouent en alternance. La frise sous
+le bandeau de tour montre cet ordre.
+
+- **Ligne de vue** : les sorts à distance exigent de voir la case visée. Rochers, caisses et
+  combattants bloquent la vue, l'eau non. Les cases à portée mais masquées s'affichent en gris.
+- **Obstacles destructibles** : les caisses (24 PV) et rondins (18 PV) se détruisent à coups de sorts
+  ou de chocs ; la case devient alors praticable. Les rochers sont indestructibles.
+- **Poussée** : un combattant poussé contre un obstacle, un bord ou un autre combattant subit 6 dégâts
+  par case non parcourue (le combattant percuté en subit la moitié).
+- **Statuts** : poison (dégâts au début de chaque tour), silence (plus de sorts pendant un tour, puis
+  immunité un tour), bouclier (-50 % de dégâts jusqu'au prochain tour).
+- **Relance** : certains sorts ne sont relançables qu'au bout de N tours (indiqué sur le bouton).
+- **Tir allié** : les sorts de zone touchent aussi vos alliés (jamais le lanceur).
+
+| Classe | PV / PA / PM | Sorts |
+|---|---|---|
+| **Guerrier** (contrôle, corps à corps) | 100 / 6 / 3 | Frappe assommante (silence) · Coup de charge · Bouclier · Repousser · Grappin |
+| **Mage** (distance, mobilité) | 60 / 7 / 4 | Trait arcanique · Boule de feu (croix) · Soin (allié) · Téléportation · Poison |
+| **Archère** (longue portée, terrain) | 75 / 6 / 3 | Tir précis · Flèche de recul · Piège · Pluie de flèches (3×3) · Bond |
+
+Les valeurs exactes (dégâts, portées, relances) sont dans l'info-bulle de chaque sort et dans
+`model/catalog/FighterCatalog.java`.
+
+**Ordinateur** : il essaie chaque action possible sur une copie du combat (tirages remplacés par leur
+moyenne) et garde celle qui mène à la meilleure situation. *Facile* choisit souvent un coup correct
+sans être le meilleur ; *Normal* joue le meilleur coup et se place selon sa classe ; *Difficile*
+anticipe aussi la riposte adverse.
+
 ## Architecture
 
 ```
 src/main/java/com/minidofus/
-├── Main.java                 point d'entrée (fenêtre, options --map / --seed)
+├── Main.java                 point d'entrée (fenêtre, options de lancement)
 ├── model/                    RÈGLES DU JEU — aucune dépendance graphique, testable seule
-│   ├── Battle.java           tours, déplacements, lancer de sorts, victoire ; publie des BattleEvent
+│   ├── Battle.java           initiative, tours, déplacements, sorts, statuts, pièges, victoire ; publie des BattleEvent
 │   ├── BattleEvent.java      ce qui s'est passé (déplacé, touché, soigné…), rejoué par la vue
 │   ├── Board, Cell, Terrain  grille 15×15 stockée en tableaux (pas de clés texte "x,y")
 │   ├── Fighter(Class)        combattant (état) et sa classe (caractéristiques, sorts)
 │   ├── Pathfinder.java       parcours en largeur sur tableaux d'entiers
 │   ├── Spell, SpellContext   contrat d'un sort et ce qu'il a le droit de faire
-│   ├── spell/                un fichier par mécanique : frappe, zone en croix, charge, bouclier, soin
+│   ├── LineOfSight.java      ligne de vue (cases traversées, règle permissive aux coins)
+│   ├── spell/                un fichier par mécanique : frappe, zone, charge, grappin, poison, piège, mobilité…
+│   ├── ai/                   ordinateur : simulation de chaque action et évaluation, 3 niveaux
 │   ├── catalog/              FighterCatalog : tout l'équilibrage au même endroit
 │   └── map/                  génération de cartes (ambiances, décor, garanties de jouabilité)
 ├── engine/                   images (cache, miroirs, teintes), sons (clips préchargés), courbes
@@ -120,19 +162,18 @@ une nouvelle sans recharger.
 
 ## Tests
 
-`build.sh` / `build.bat` lancent `AllTests` : 86 vérifications sur les règles (déplacements, PA, charge,
-zone, bouclier, soin, victoire) et sur la génération de 900 cartes.
+`build.sh` / `build.bat` lancent `AllTests` : 141 vérifications sur les règles (ligne de vue, initiative,
+statuts, relances, poussées et chocs, pièges, caisses, victoire par équipe), sur la génération de 900 cartes,
+et sur l'ordinateur (parties complètes de 1c1 à 3c3, et le niveau Difficile doit battre le Facile).
 
 Deux outils de vérification visuelle, dans `src/test/java` :
 
-- `game.Snapshots` joue une partie automatique hors écran (une IA simple contrôle les deux camps)
-  et enregistre des captures aux moments clés, avec le temps de rendu moyen.
+- `game.Snapshots` joue une partie ordinateur contre ordinateur hors écran et enregistre une capture à
+  la première apparition de chaque sort, avec le temps de rendu moyen.
 - `WindowSmokeTest` ouvre la vraie fenêtre et la pilote avec de vrais clics et touches.
 
 ## Pistes
 
-- Un adversaire contrôlé par l'ordinateur : l'IA de `Snapshots` est un bon point de départ, à déplacer
-  dans le modèle.
 - Des animations de marche : le pack ne contient que des poses fixes.
 - Si le projet grandit (plusieurs combats, monde ouvert, effets lourds), un moteur dédié comme
   libGDX (Java) ou Godot (C#) prendrait le relais ; le paquet `model/` se réutiliserait tel quel.

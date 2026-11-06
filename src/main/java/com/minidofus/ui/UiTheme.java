@@ -1,5 +1,7 @@
 package com.minidofus.ui;
 
+import com.minidofus.model.Team;
+
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -35,13 +37,17 @@ public final class UiTheme {
     public static final Color HEAL = new Color(0x2ECC71);
     public static final Color SHIELD = new Color(0x88CCFF);
 
-    /** Couleur d'équipe par identifiant de classe. */
-    public static Color teamColor(String classId) {
-        return "warrior".equals(classId) ? new Color(0xE74C3C) : new Color(0x3498DB);
+    public static final Color POISON = new Color(0x7BD34A);
+    public static final Color SILENCE = new Color(0xC6B5E8);
+
+    /** Couleur d'équipe (anneaux, cartes, frise). */
+    public static Color teamColor(Team team) {
+        return team == Team.RED ? new Color(0xE74C3C) : new Color(0x3498DB);
     }
 
-    public static Color teamTextColor(String classId) {
-        return "warrior".equals(classId) ? new Color(0xF0A090) : new Color(0x9CC4F0);
+    /** Variante claire, lisible sur fond sombre. */
+    public static Color teamTextColor(Team team) {
+        return team == Team.RED ? new Color(0xF0A090) : new Color(0x9CC4F0);
     }
 
     // Polices : on prend la première disponible sur la machine, avec repli sur les polices logiques Java.

@@ -2,6 +2,10 @@ package com.minidofus;
 
 import com.minidofus.engine.Assets;
 import com.minidofus.game.GameView;
+import com.minidofus.game.MatchSetup;
+import com.minidofus.model.FighterClass;
+import com.minidofus.model.ai.Difficulty;
+import com.minidofus.model.catalog.FighterCatalog;
 import com.minidofus.model.map.MapTheme;
 
 import javax.swing.JFrame;
@@ -9,13 +13,20 @@ import javax.swing.SwingUtilities;
 import java.awt.Dimension;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 /**
- * Point d'entrée. Options :
+ * Point d'entrée. Options (toutes facultatives) :
  * <pre>
- *   --map forest|ruins|lake   ambiance de la carte (sinon aléatoire)
- *   --seed 1234               graine de la carte (pour rejouer exactement la même)
+ *   --map forest|ruins|lake          ambiance de la carte (sinon aléatoire)
+ *   --seed 1234                      graine de la carte (pour rejouer exactement la même)
+ *   --red warrior,archer             composition de l'équipe rouge (1 à 3 parmi warrior, mage, archer)
+ *   --blue mage                      composition de l'équipe bleue
+ *   --ai easy|normal|hard            l'ordinateur joue l'équipe bleue
+ *   --ai-red easy|normal|hard        l'ordinateur joue l'équipe rouge
  * </pre>
  */
 public final class Main {
@@ -23,23 +34,32 @@ public final class Main {
     private Main() { }
 
     public static void main(String[] args) {
-        MapTheme theme = null;
-        Long seed = null;
+        Random random = new Random();
+        MapTheme theme = MapTheme.values()[random.nextInt(MapTheme.values().length)];
+        long seed = GameView.randomSeed(random);
+        List<FighterClass> red = List.of(FighterCatalog.WARRIOR);
+        List<FighterClass> blue = List.of(FighterCatalog.MAGE);
+        Difficulty redAi = null;
+        Difficulty blueAi = null;
         for (int i = 0; i + 1 < args.length; i += 2) {
+            String value = args[i + 1];
             switch (args[i]) {
-                case "--map" -> theme = parseTheme(args[i + 1]);
-                case "--seed" -> seed = Long.parseLong(args[i + 1]);
+                case "--map" -> theme = parseTheme(value);
+                case "--seed" -> seed = Long.parseLong(value);
+                case "--red" -> red = parseTeam(value);
+                case "--blue" -> blue = parseTeam(value);
+                case "--ai" -> blueAi = parseDifficulty(value);
+                case "--ai-red" -> redAi = parseDifficulty(value);
                 default -> System.err.println("Option inconnue : " + args[i]);
             }
         }
-        MapTheme finalTheme = theme;
-        Long finalSeed = seed;
-        SwingUtilities.invokeLater(() -> open(finalTheme, finalSeed));
+        MatchSetup setup = new MatchSetup(theme, seed, red, blue, redAi, blueAi);
+        SwingUtilities.invokeLater(() -> open(setup));
     }
 
-    private static void open(MapTheme theme, Long seed) {
-        JFrame frame = new JFrame("Mini Dofus — Combat tactique");
-        GameView view = new GameView(theme, seed);
+    private static void open(MatchSetup setup) {
+        JFrame frame = new JFrame("Swords & Spells — Combat tactique");
+        GameView view = new GameView(setup);
         frame.setContentPane(view);
         frame.setIconImage(new Assets().image("ui/portrait_warrior"));
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -55,6 +75,18 @@ public final class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
         view.start();
+    }
+
+    private static List<FighterClass> parseTeam(String value) {
+        return Arrays.stream(value.split(",")).map(String::trim).map(FighterCatalog::byId).toList();
+    }
+
+    private static Difficulty parseDifficulty(String value) {
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "easy", "facile" -> Difficulty.EASY;
+            case "hard", "difficile" -> Difficulty.HARD;
+            default -> Difficulty.NORMAL;
+        };
     }
 
     private static MapTheme parseTheme(String value) {

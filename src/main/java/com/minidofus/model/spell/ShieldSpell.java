@@ -4,28 +4,24 @@ import com.minidofus.model.CastStyle;
 import com.minidofus.model.Cell;
 import com.minidofus.model.Fighter;
 import com.minidofus.model.SpellContext;
+import com.minidofus.model.StatusKind;
 import com.minidofus.model.TargetMode;
 
 import java.util.List;
 
-/**
- * Réduit les dégâts subis. {@code durationTurns = 1} protège pendant le prochain tour adverse puis
- * expire au début du tour du lanceur (dans le prototype, la durée réelle était de 2 tours adverses).
- */
+/** Réduit les dégâts subis jusqu'au début du prochain tour du lanceur. */
 public final class ShieldSpell extends AbstractSpell {
 
     private final int reductionPercent;
-    private final int durationTurns;
 
-    public ShieldSpell(String id, String name, int cost, int reductionPercent, int durationTurns) {
-        super(id, name, cost, 0, 0, TargetMode.SELF, CastStyle.SHIELD);
+    public ShieldSpell(Base base, int reductionPercent) {
+        super(base.noLineOfSight(), TargetMode.SELF, CastStyle.SHIELD);
         this.reductionPercent = reductionPercent;
-        this.durationTurns = durationTurns;
     }
 
     @Override
     public String effectSummary() {
-        return "-" + reductionPercent + "% dégâts";
+        return "-" + reductionPercent + " % de dégâts subis jusqu'à votre prochain tour";
     }
 
     @Override
@@ -40,6 +36,6 @@ public final class ShieldSpell extends AbstractSpell {
 
     @Override
     public void apply(SpellContext ctx, Fighter caster, Cell target) {
-        ctx.applyShield(caster, reductionPercent, durationTurns);
+        ctx.addStatus(caster, caster, StatusKind.SHIELD, 1, reductionPercent);
     }
 }

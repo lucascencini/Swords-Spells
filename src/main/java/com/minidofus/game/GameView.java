@@ -34,7 +34,7 @@ import java.util.Random;
 @SuppressWarnings("serial")
 public final class GameView extends JComponent {
 
-    private static final int HUD_TOP = 100;
+    private static final int HUD_TOP = 132;
     private static final int HUD_BOTTOM = 150;
 
     private final Assets assets = new Assets();
@@ -55,11 +55,11 @@ public final class GameView extends JComponent {
     private Point2D.Double dragLast;
     private boolean dragging;
 
-    public GameView(MapTheme theme, Long seed) {
+    public GameView(MatchSetup setup) {
         setFocusable(true);
         setDoubleBuffered(true);
         sound.preload(Sfx.allFiles());
-        newSession(theme != null ? theme : randomTheme(), seed != null ? seed : random.nextLong() & 0xFFFFFFL);
+        newSession(setup);
         timer = new Timer(1000 / 60, e -> tick());
         timer.setCoalesce(true);
         installMouse();
@@ -105,8 +105,13 @@ public final class GameView extends JComponent {
 
     // ------------------------------------------------------------------ parties
 
-    private void newSession(MapTheme theme, long seed) {
-        session = new GameSession(theme, seed, assets, poses, sound, hud);
+    /** Thème au hasard et graine aléatoire, pour une nouvelle carte. */
+    public static long randomSeed(Random random) {
+        return random.nextLong() & 0xFFFFFFL;
+    }
+
+    private void newSession(MatchSetup setup) {
+        session = new GameSession(setup, assets, poses, sound, hud);
         if (getWidth() > 0) {
             hud.layout(getWidth(), getHeight(), session.spellCount());
             fitCamera();
@@ -177,7 +182,7 @@ public final class GameView extends JComponent {
                 HudAction action = hud.hit(e.getX(), e.getY(), session);
                 if (action != null) {
                     perform(action);
-                } else if (!hud.covers(e.getX(), e.getY(), session.isOver())) {
+                } else if (!hud.covers(e.getX(), e.getY(), session)) {
                     session.click(cellAt(e.getX(), e.getY()));
                 }
             }
@@ -202,7 +207,7 @@ public final class GameView extends JComponent {
             @Override
             public void mouseMoved(MouseEvent e) {
                 hud.setMouse(e.getX(), e.getY());
-                boolean overHud = hud.covers(e.getX(), e.getY(), session.isOver());
+                boolean overHud = hud.covers(e.getX(), e.getY(), session);
                 session.hover(overHud ? null : cellAt(e.getX(), e.getY()));
             }
 
@@ -233,8 +238,8 @@ public final class GameView extends JComponent {
             case SPELL -> session.selectSpell(action.index());
             case END_TURN -> session.endTurn();
             case MUTE -> sound.toggleMute();
-            case REPLAY -> newSession(session.theme(), session.seed());
-            case NEW_MAP -> newSession(randomTheme(), random.nextLong() & 0xFFFFFFL);
+            case REPLAY -> newSession(session.setup());
+            case NEW_MAP -> newSession(session.setup().withMap(randomTheme(), randomSeed(random)));
         }
     }
 
@@ -245,12 +250,11 @@ public final class GameView extends JComponent {
         bind("ENTER", () -> session.endTurn());
         bind("ESCAPE", () -> session.cancel());
         bind("D", () -> session.selectMove());
-        bind("1", () -> session.selectSpell(0));
-        bind("2", () -> session.selectSpell(1));
-        bind("3", () -> session.selectSpell(2));
-        bind("NUMPAD1", () -> session.selectSpell(0));
-        bind("NUMPAD2", () -> session.selectSpell(1));
-        bind("NUMPAD3", () -> session.selectSpell(2));
+        for (int i = 1; i <= 5; i++) {
+            int index = i - 1;
+            bind(String.valueOf(i), () -> session.selectSpell(index));
+            bind("NUMPAD" + i, () -> session.selectSpell(index));
+        }
         bind("C", this::fitCamera);
         bind("M", sound::toggleMute);
         bind("F3", () -> {

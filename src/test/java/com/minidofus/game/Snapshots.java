@@ -1,11 +1,13 @@
 package com.minidofus.game;
 
-import com.minidofus.model.Battle;
-import com.minidofus.model.Cell;
+import com.minidofus.model.BattleEvent;
+import com.minidofus.model.CastStyle;
 import com.minidofus.model.Fighter;
-import com.minidofus.model.Pathfinder;
+import com.minidofus.model.FighterClass;
 import com.minidofus.model.Spell;
 import com.minidofus.model.TargetMode;
+import com.minidofus.model.ai.Difficulty;
+import com.minidofus.model.catalog.FighterCatalog;
 import com.minidofus.model.map.MapTheme;
 
 import javax.imageio.ImageIO;
@@ -13,13 +15,17 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
- * Outil de vérification visuelle : joue une partie automatique (les deux camps sont pilotés par une IA
- * simple) dans une vue hors écran, enregistre des captures aux moments clés et mesure le temps de rendu.
- * Usage : {@code java -cp ... com.minidofus.game.Snapshots <dossier> [forest|ruins|lake] [graine]}
+ * Outil de vérification visuelle : affiche un aperçu de portée en mode deux joueurs, puis joue une partie
+ * complète ordinateur contre ordinateur dans une vue hors écran. Il enregistre une capture à la première
+ * apparition de chaque style de sort, et mesure le temps de rendu.
+ * Usage : {@code Snapshots <dossier> [carte] [graine] [équipe rouge] [équipe bleue]}, ex. {@code shots lake 3 warrior,archer mage,mage}
  */
 public final class Snapshots {
 
@@ -27,15 +33,14 @@ public final class Snapshots {
     private static final int H = 800;
     private static final double DT = 1 / 60.0;
 
-    private final GameView view;
     private final File out;
     private final BufferedImage frame = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
+    private GameView view;
     private long renderNanos;
     private int renders;
     private int shots;
 
-    private Snapshots(GameView view, File out) {
-        this.view = view;
+    private Snapshots(File out) {
         this.out = out;
     }
 
@@ -44,18 +49,78 @@ public final class Snapshots {
         out.mkdirs();
         MapTheme theme = args.length > 1 ? MapTheme.valueOf(args[1].toUpperCase(Locale.ROOT)) : MapTheme.FOREST;
         long seed = args.length > 2 ? Long.parseLong(args[2]) : 7;
-        GameView view = new GameView(theme, seed);
-        view.layoutOffscreen(W, H);
-        new Snapshots(view, out).play();
+        List<FighterClass> red = args.length > 3 ? team(args[3]) : List.of(FighterCatalog.WARRIOR, FighterCatalog.ARCHER);
+        List<FighterClass> blue = args.length > 4 ? team(args[4]) : List.of(FighterCatalog.MAGE, FighterCatalog.WARRIOR);
+        new Snapshots(out).play(theme, seed, red, blue);
         System.exit(0);
     }
 
-    private GameSession session() {
-        return view.session();
+    private static List<FighterClass> team(String csv) {
+        return Arrays.stream(csv.split(",")).map(FighterCatalog::byId).toList();
     }
 
-    private Battle battle() {
-        return session().battle();
+    private void play(MapTheme theme, long seed, List<FighterClass> red, List<FighterClass> blue) throws Exception {
+        // 1) deux joueurs humains : aperçus de déplacement et de portée
+        view = new GameView(new MatchSetup(theme, seed, red, blue, null, null));
+        view.layoutOffscreen(W, H);
+        run(0.7);
+        shot("intro");
+        run(2.2);
+        GameSession s = view.session();
+        Fighter me = s.battle().active();
+        Fighter foe = closestEnemy(s, me);
+        s.hover(foe.position().plus(me.position().x() < foe.position().x() ? -3 : 3, 0));
+        run(0.05);
+        shot("apercu_deplacement");
+        List<Spell> spells = me.fighterClass().spells();
+        for (int i = 0; i < spells.size(); i++) {
+            if (spells.get(i).maxRange() >= 4 && spells.get(i).targetMode() != TargetMode.SELF) {
+                s.selectSpell(i);
+                s.hover(foe.position());
+                run(0.05);
+                shot("apercu_portee_" + spells.get(i).id());
+                break;
+            }
+        }
+
+        // 2) ordinateur contre ordinateur, jusqu'à la fin
+        view = new GameView(new MatchSetup(theme, seed, red, blue, Difficulty.HARD, Difficulty.NORMAL));
+        view.layoutOffscreen(W, H);
+        Set<CastStyle> seen = EnumSet.noneOf(CastStyle.class);
+        List<String> pending = new ArrayList<>();
+        double[] shotAt = {-1};
+        double[] clock = {0};
+        view.session().battle().addListener(e -> {
+            if (e instanceof BattleEvent.SpellCast c && seen.add(c.spell().style()) && shotAt[0] < 0) {
+                pending.add("sort_" + c.spell().id());
+                shotAt[0] = clock[0] + (c.spell().style() == CastStyle.ARROW_RAIN || c.spell().style() == CastStyle.FIREBALL ? 0.34 : 0.22);
+            }
+        });
+        for (int i = 0; i < 60 * 600 && !(view.session().isOver() && !view.session().isBusy()); i++) {
+            view.advance(DT);
+            clock[0] += DT;
+            render();
+            if (shotAt[0] >= 0 && clock[0] >= shotAt[0]) {
+                shot(pending.remove(0));
+                shotAt[0] = -1;
+            }
+        }
+        run(1.5);
+        shot("fin");
+        GameSession end = view.session();
+        System.out.printf(Locale.ROOT, "%d manches, vainqueur : %s, %d styles de sorts vus%n",
+                end.round(), end.isOver() ? end.winner().displayName() : "aucun", seen.size());
+        System.out.printf(Locale.ROOT, "%d images rendues, %.2f ms par image en moyenne (rendu logiciel hors écran)%n",
+                renders, renderNanos / 1e6 / renders);
+    }
+
+    private static Fighter closestEnemy(GameSession s, Fighter me) {
+        Fighter best = null;
+        for (Fighter f : s.battle().fighters()) {
+            if (!f.isEnemyOf(me)) continue;
+            if (best == null || f.position().distanceTo(me.position()) < best.position().distanceTo(me.position())) best = f;
+        }
+        return best;
     }
 
     private void run(double seconds) {
@@ -63,14 +128,6 @@ public final class Snapshots {
             view.advance(DT);
             render();
         }
-    }
-
-    private void settle() {
-        int guard = 0;
-        do {
-            view.advance(DT);
-            render();
-        } while (session().isBusy() && guard++ < 600);
     }
 
     private void render() {
@@ -85,105 +142,5 @@ public final class Snapshots {
     private void shot(String name) throws Exception {
         render();
         ImageIO.write(frame, "png", new File(out, String.format("%02d_%s.png", ++shots, name)));
-    }
-
-    private void play() throws Exception {
-        run(0.6);
-        shot("intro_banniere");
-        run(2.0);
-
-        // aperçu du chemin de déplacement
-        Fighter a = battle().active();
-        Pathfinder.Reach reach = battle().reach();
-        Cell target = closestTo(reach.cells(), battle().opponentOf(a).position());
-        session().hover(target);
-        run(0.1);
-        shot("apercu_deplacement");
-
-        boolean rangeShot = false;
-        boolean impactShot = false;
-        boolean projectileShot = false;
-        for (int turn = 0; turn < 60 && !battle().isOver(); turn++) {
-            Fighter me = battle().active();
-            Fighter foe = battle().opponentOf(me);
-            boolean acted = true;
-            int actions = 0;
-            while (acted && !battle().isOver() && actions++ < 6) {
-                acted = false;
-                // 1) attaquer si possible
-                List<Spell> spells = me.fighterClass().spells();
-                for (int i = 0; i < spells.size(); i++) {
-                    Spell s = spells.get(i);
-                    if (s.targetMode() == TargetMode.SELF) continue;
-                    if (!battle().canCast(s, foe.position())) continue;
-                    session().selectSpell(i);
-                    session().hover(foe.position());
-                    run(0.05);
-                    if (!impactShot && s.targetMode() == TargetMode.CELL) {
-                        shot("apercu_zone_" + s.id());
-                        impactShot = true;
-                    } else if (!rangeShot) {
-                        shot("apercu_portee_" + s.id());
-                        rangeShot = true;
-                    }
-                    session().click(foe.position());
-                    if (!projectileShot && (s.id().equals("fireball") || s.id().equals("ranged"))) {
-                        run(0.22);
-                        shot("projectile_" + s.id());
-                        projectileShot = true;
-                    }
-                    run(0.45);
-                    if (shots < 12) shot("impact_" + s.id());
-                    settle();
-                    acted = true;
-                    break;
-                }
-                if (acted) continue;
-                // 2) sinon se rapprocher
-                if (me.pm() > 0) {
-                    Pathfinder.Reach r = battle().reach();
-                    Cell best = closestTo(r.cells(), foe.position());
-                    if (best != null && best.distanceTo(foe.position()) < me.position().distanceTo(foe.position())) {
-                        session().selectMove();
-                        session().hover(best);
-                        session().click(best);
-                        settle();
-                        acted = true;
-                        continue;
-                    }
-                }
-                // 3) sinon sort personnel (bouclier/soin)
-                for (int i = 0; i < me.fighterClass().spells().size(); i++) {
-                    Spell s = me.fighterClass().spells().get(i);
-                    if (s.targetMode() == TargetMode.SELF && me.pa() >= s.cost() && (s.id().equals("shield") || me.hp() < me.maxHp() - 12)) {
-                        session().selectSpell(i);
-                        session().selectSpell(i); // ré-appuyer lance le sort
-                        run(0.2);
-                        if (shots < 14) shot("sort_personnel_" + s.id());
-                        settle();
-                        acted = true;
-                        break;
-                    }
-                }
-            }
-            if (!battle().isOver()) {
-                session().endTurn();
-                settle();
-            }
-        }
-        run(1.5);
-        shot("ecran_de_fin");
-        System.out.printf(Locale.ROOT, "%d tours joués, vainqueur : %s%n", battle().turn(),
-                battle().isOver() ? battle().winner().name() : "aucun");
-        System.out.printf(Locale.ROOT, "%d images rendues, %.2f ms par image en moyenne (rendu logiciel hors écran)%n",
-                renders, renderNanos / 1e6 / renders);
-    }
-
-    private static Cell closestTo(List<Cell> cells, Cell goal) {
-        Cell best = null;
-        for (Cell c : new ArrayList<>(cells)) {
-            if (best == null || c.distanceTo(goal) < best.distanceTo(goal)) best = c;
-        }
-        return best;
     }
 }

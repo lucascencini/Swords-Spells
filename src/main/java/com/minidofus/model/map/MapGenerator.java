@@ -10,9 +10,9 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Génère une arène reproductible à partir d'une graine. Garanties (absentes du prototype) :
- * les deux points d'apparition sont reliés par un chemin praticable, les zones de départ sont
- * dégagées, l'eau est infranchissable et aucun grand arbre ne masque le terrain de jeu.
+ * Génère une arène reproductible à partir d'une graine. Garanties : tous les points d'apparition
+ * sont reliés par des chemins praticables (même si toutes les caisses restaient intactes), les zones
+ * de départ sont dégagées, l'eau est infranchissable et aucun grand arbre ne masque le terrain de jeu.
  */
 public final class MapGenerator {
 
@@ -35,10 +35,15 @@ public final class MapGenerator {
         return build(theme, seed, rng, false); // repli : arène sans obstacles, toujours valide
     }
 
+    /** Points d'apparition : un coin de la carte par équipe, trois places chacun. */
+    public static final List<Cell> RED_SPAWNS = List.of(new Cell(1, 1), new Cell(3, 1), new Cell(1, 3));
+    public static final List<Cell> BLUE_SPAWNS = List.of(new Cell(SIZE - 2, SIZE - 2), new Cell(SIZE - 4, SIZE - 2),
+            new Cell(SIZE - 2, SIZE - 4));
+
     private static Arena build(MapTheme theme, long seed, Random rng, boolean withObstacles) {
         Board board = new Board(SIZE);
-        Cell spawnA = new Cell(1, 1);
-        Cell spawnB = new Cell(SIZE - 2, SIZE - 2);
+        Cell spawnA = RED_SPAWNS.get(0);
+        Cell spawnB = BLUE_SPAWNS.get(0);
 
         paintGround(board, rng);
         if (withObstacles) {
@@ -49,11 +54,11 @@ public final class MapGenerator {
         List<DecorPlacement> decor = new ArrayList<>();
         if (withObstacles) {
             placeObstacles(theme, board, rng, spawnA, spawnB, decor);
-            if (!connected(board, spawnA, spawnB)) return null;
+            if (!allSpawnsConnected(board)) return null;
         }
         placeFlowers(theme, board, rng, decor);
         placeTrees(theme, rng, decor);
-        return new Arena(theme, seed, board, List.copyOf(decor), spawnA, spawnB);
+        return new Arena(theme, seed, board, List.copyOf(decor), RED_SPAWNS, BLUE_SPAWNS);
     }
 
     // ------------------------------------------------------------------ sol
@@ -103,7 +108,7 @@ public final class MapGenerator {
             Cell base = water.get(rng.nextInt(water.size()));
             int[] d = Cell.ORTHOGONAL[rng.nextInt(4)];
             Cell next = base.plus(d[0], d[1]);
-            if (!board.inBounds(next) || next.distanceTo(a) < SPAWN_CLEARANCE + 3 || next.distanceTo(b) < SPAWN_CLEARANCE + 3) continue;
+            if (!board.inBounds(next) || nearSpawn(next, SPAWN_CLEARANCE + 2)) continue;
             if (board.terrain(next.x(), next.y()) == Terrain.WATER) continue;
             board.setTerrain(next.x(), next.y(), Terrain.WATER);
             water.add(next);
@@ -118,10 +123,10 @@ public final class MapGenerator {
             int x = 1 + rng.nextInt(SIZE - 2);
             int y = 1 + rng.nextInt(SIZE - 2);
             Cell c = new Cell(x, y);
-            if (c.distanceTo(a) <= SPAWN_CLEARANCE || c.distanceTo(b) <= SPAWN_CLEARANCE) continue;
+            if (nearSpawn(c, SPAWN_CLEARANCE)) continue;
             if (!board.isWalkable(x, y)) continue; // déjà un obstacle ou de l'eau
-            board.setObstacle(x, y, true);
             DecorKind kind = theme.obstacleKinds().get(rng.nextInt(theme.obstacleKinds().size()));
+            board.setObstacle(x, y, true, kind.durability());
             out.add(new DecorPlacement(kind, x, y, 0.92 + rng.nextDouble() * 0.16, rng.nextBoolean()));
             placed++;
         }
@@ -189,8 +194,22 @@ public final class MapGenerator {
 
     // ------------------------------------------------------------------ validation
 
-    /** Les deux points d'apparition sont-ils reliés par des cases praticables ? */
+    /** Les deux cases sont-elles reliées par des cases praticables ? */
     public static boolean connected(Board board, Cell a, Cell b) {
         return Pathfinder.compute(board, a, SIZE * SIZE, c -> false).costTo(b) > 0;
+    }
+
+    /** Tous les points d'apparition sont-ils reliés au premier ? */
+    public static boolean allSpawnsConnected(Board board) {
+        Pathfinder.Reach reach = Pathfinder.compute(board, RED_SPAWNS.get(0), SIZE * SIZE, c -> false);
+        for (Cell c : RED_SPAWNS) if (!c.equals(RED_SPAWNS.get(0)) && !reach.canReach(c)) return false;
+        for (Cell c : BLUE_SPAWNS) if (!reach.canReach(c)) return false;
+        return true;
+    }
+
+    private static boolean nearSpawn(Cell c, int distance) {
+        for (Cell s : RED_SPAWNS) if (c.distanceTo(s) <= distance) return true;
+        for (Cell s : BLUE_SPAWNS) if (c.distanceTo(s) <= distance) return true;
+        return false;
     }
 }

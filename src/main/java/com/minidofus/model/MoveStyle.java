@@ -1,7 +1,11 @@
 package com.minidofus.model;
 
-/** Manière dont un combattant se déplace (change l'animation, pas les règles). */
+/** Manière dont un combattant change de case (change l'animation, pas les règles). */
 public enum MoveStyle {
     WALK,
-    DASH
+    DASH,
+    PUSHED,
+    PULLED,
+    TELEPORT,
+    LEAP
 }

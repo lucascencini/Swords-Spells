@@ -13,7 +13,7 @@ public final class MapTests {
     private MapTests() { }
 
     public static void run() {
-        Check.suite("Génération de cartes (3 ambiances x 300 graines)");
+        Check.suite("Génération de cartes (" + MapTheme.values().length + " ambiances x 300 graines)");
         int lakeWithWater = 0;
         int pathWithStone = 0;
         int problems = 0;
@@ -22,8 +22,10 @@ public final class MapTests {
                 Arena a = MapGenerator.generate(theme, seed);
                 Board board = a.board();
                 String tag = theme + "/" + seed;
-                if (!MapGenerator.connected(board, a.spawnA(), a.spawnB())) { problems++; Check.that(false, tag + " : spawns non reliés"); }
-                if (!board.isWalkable(a.spawnA()) || !board.isWalkable(a.spawnB())) { problems++; Check.that(false, tag + " : spawn non praticable"); }
+                if (!MapGenerator.allSpawnsConnected(board)) { problems++; Check.that(false, tag + " : spawns non reliés"); }
+                for (Team t : Team.values()) {
+                    for (Cell sp : a.spawns(t)) if (!board.isWalkable(sp)) { problems++; Check.that(false, tag + " : spawn non praticable"); }
+                }
 
                 int obstacles = 0;
                 int water = 0;
@@ -33,7 +35,12 @@ public final class MapTests {
                         Cell c = new Cell(x, y);
                         if (board.hasObstacle(x, y)) {
                             obstacles++;
-                            if (c.distanceTo(a.spawnA()) <= 2 || c.distanceTo(a.spawnB()) <= 2) { problems++; Check.that(false, tag + " : obstacle près d'un spawn"); }
+                            for (Team t : Team.values()) {
+                                for (Cell sp : a.spawns(t)) {
+                                    if (c.distanceTo(sp) <= 2) { problems++; Check.that(false, tag + " : obstacle près d'un spawn"); }
+                                }
+                            }
+                            if (board.isDestructible(c) != (board.obstacleHp(c) > 0)) problems++;
                         }
                         if (board.terrain(x, y) == Terrain.WATER) water++;
                         if (board.terrain(x, y) == Terrain.STONE) stone++;

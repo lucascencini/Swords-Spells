@@ -1,11 +1,30 @@
 package com.minidofus.model;
 
-/** Indication de mise en scène d'un sort : le modèle décrit, la vue choisit les effets. */
+/**
+ * Indication de mise en scène : le modèle décrit, la vue choisit les effets. Les trois dernières valeurs
+ * ne sont pas des sorts mais des sources de dégâts indirectes.
+ */
 public enum CastStyle {
     MELEE,
-    ARCANE_BOLT,
-    FIREBALL,
+    STUN_STRIKE,
+    PUSH_STRIKE,
     DASH,
     SHIELD,
-    HEAL
+    GRAPPLE,
+    ARCANE_BOLT,
+    FIREBALL,
+    HEAL,
+    TELEPORT,
+    POISON,
+    ARROW,
+    RECOIL_ARROW,
+    TRAP,
+    ARROW_RAIN,
+    LEAP,
+    /** Choc contre un mur, un obstacle ou un combattant après une poussée. */
+    COLLISION,
+    /** Déclenchement d'un piège. */
+    TRAP_TRIGGER,
+    /** Dégâts de poison en début de tour. */
+    POISON_TICK
 }

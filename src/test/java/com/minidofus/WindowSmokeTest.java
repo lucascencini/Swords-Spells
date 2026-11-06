@@ -19,7 +19,7 @@ public final class WindowSmokeTest {
     public static void main(String[] args) throws Exception {
         File out = new File(args.length > 0 ? args[0] : "smoke");
         out.mkdirs();
-        Main.main(new String[] {"--map", "forest", "--seed", "11"});
+        Main.main(new String[] {"--map", "forest", "--seed", "11", "--red", "warrior,archer", "--blue", "mage,warrior"});
         Robot robot = new Robot();
         robot.setAutoDelay(40);
         Thread.sleep(3500);
@@ -44,9 +44,9 @@ public final class WindowSmokeTest {
         // Échap puis clic sur « Fin du tour » (coordonnées calculées comme dans Hud.layout)
         robot.keyPress(KeyEvent.VK_ESCAPE);
         robot.keyRelease(KeyEvent.VK_ESCAPE);
-        int total = 74 * 4 + 10 * 3 + 22 + 118;
-        int endX = (b.width - total) / 2 + total - 59;
-        int endY = b.height - 84 - 18 + 42;
+        int total = 70 * 6 + 8 * 5 + 18 + 112;
+        int endX = (b.width - total) / 2 + total - 56;
+        int endY = b.height - 82 - 16 + 41;
         robot.mouseMove(origin.x + endX, origin.y + endY);
         robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
         robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);

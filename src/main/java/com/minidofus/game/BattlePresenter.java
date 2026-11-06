@@ -9,6 +9,7 @@ import com.minidofus.model.CastStyle;
 import com.minidofus.model.Cell;
 import com.minidofus.model.Fighter;
 import com.minidofus.model.MoveStyle;
+import com.minidofus.model.StatusKind;
 import com.minidofus.ui.Hud;
 import com.minidofus.ui.UiTheme;
 import com.minidofus.view.BattleScene;
@@ -16,11 +17,13 @@ import com.minidofus.view.FighterView;
 import com.minidofus.view.Iso;
 import com.minidofus.view.anim.Animation;
 import com.minidofus.view.anim.AnimationQueue;
+import com.minidofus.view.fx.Arrow;
 import com.minidofus.view.fx.Burst;
 import com.minidofus.view.fx.FloatingText;
 import com.minidofus.view.fx.Projectile;
 import com.minidofus.view.fx.RingPulse;
 import com.minidofus.view.fx.Slash;
+import com.minidofus.view.fx.Tether;
 
 import java.awt.Color;
 import java.awt.geom.Point2D;
@@ -31,6 +34,7 @@ import java.util.function.Consumer;
 import static com.minidofus.view.anim.Animations.call;
 import static com.minidofus.view.anim.Animations.defer;
 import static com.minidofus.view.anim.Animations.delay;
+import static com.minidofus.view.anim.Animations.parallel;
 import static com.minidofus.view.anim.Animations.sequence;
 import static com.minidofus.view.anim.Animations.tween;
 
@@ -43,6 +47,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
 
     private static final double WALK_STEP = 0.17;
     private static final double DASH_STEP = 0.075;
+    private static final double SLIDE_STEP = 0.09;
 
     private final BattleScene scene;
     private final AnimationQueue queue;
@@ -50,6 +55,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     private final Assets assets;
     private final Hud hud;
     private final String mapName;
+    private boolean introShown;
 
     BattlePresenter(BattleScene scene, AnimationQueue queue, SoundPlayer sound, Assets assets, Hud hud, String mapName) {
         this.scene = scene;
@@ -71,23 +77,30 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         if (event instanceof BattleEvent.SpellCast e) return spellCast(e);
         if (event instanceof BattleEvent.Damaged e) return damaged(e);
         if (event instanceof BattleEvent.Healed e) return healed(e);
-        if (event instanceof BattleEvent.ShieldChanged e) return shieldChanged(e);
+        if (event instanceof BattleEvent.StatusChanged e) return statusChanged(e);
+        if (event instanceof BattleEvent.Died e) return died(e);
+        if (event instanceof BattleEvent.ObstacleDamaged e) return obstacleDamaged(e);
+        if (event instanceof BattleEvent.ObstacleDestroyed e) return obstacleDestroyed(e);
+        if (event instanceof BattleEvent.TrapPlaced e) return call(() -> scene.addTrap(e.trap()));
+        if (event instanceof BattleEvent.TrapRemoved e) return call(() -> scene.removeTrap(e.trap()));
+        if (event instanceof BattleEvent.TrapTriggered e) return trapTriggered(e);
         if (event instanceof BattleEvent.BattleEnded e) return battleEnded(e);
         return call(() -> { });
     }
 
-    // ------------------------------------------------------------------ événements
+    // ------------------------------------------------------------------ tours et déplacements
 
     private Animation turnStarted(BattleEvent.TurnStarted e) {
         return call(() -> {
             Fighter f = e.fighter();
             Point2D.Double p = view(f).worldFeet();
-            scene.effects().add(new RingPulse(p.x, p.y, UiTheme.teamColor(f.id()), 0.7));
-            Color c = UiTheme.teamTextColor(f.id());
-            if (e.turn() == 1) {
-                hud.showBanner(mapName, "Le " + f.name() + " commence !", UiTheme.GOLD_LIGHT, 2.2);
+            scene.effects().add(new RingPulse(p.x, p.y, UiTheme.teamColor(f.team()), 0.7));
+            if (!introShown) {
+                introShown = true;
+                hud.showBanner(mapName, f.name() + " (" + f.team().displayName() + ") ouvre le combat", UiTheme.GOLD_LIGHT, 2.2);
             } else {
-                hud.showBanner("Tour " + ((e.turn() + 1) / 2) + "  —  " + f.name(), null, c, 1.1);
+                hud.showBanner(f.name() + " · équipe " + f.team().displayName(), "Manche " + e.round(),
+                        UiTheme.teamTextColor(f.team()), 1.1);
             }
             Sfx.TURN.play(sound);
         });
@@ -96,45 +109,92 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     private Animation moved(BattleEvent.Moved e) {
         return defer(() -> {
             FighterView v = view(e.fighter());
-            boolean dash = e.style() == MoveStyle.DASH;
-            double step = dash ? DASH_STEP : WALK_STEP;
-            double hopHeight = dash ? 3 : 7;
-            List<Animation> steps = new ArrayList<>();
-            Cell[] from = {new Cell((int) Math.round(v.gx()), (int) Math.round(v.gy()))};
-            if (!dash) steps.add(call(() -> Sfx.MOVE.play(sound)));
-            for (Cell to : e.path()) {
-                Cell start = from[0];
-                steps.add(call(() -> v.face(start, to)));
-                steps.add(tween(step, t -> {
-                    double k = dash ? Easing.inOutQuad(t) : t;
-                    v.setGridPosition(Easing.lerp(start.x(), to.x(), k), Easing.lerp(start.y(), to.y(), k),
-                            Math.sin(t * Math.PI) * hopHeight);
-                }));
-                from[0] = to;
-            }
-            steps.add(call(() -> v.snapTo(e.path().get(e.path().size() - 1))));
-            return sequence(steps.toArray(Animation[]::new));
+            Cell start = v.cell();
+            Cell end = e.path().get(e.path().size() - 1);
+            return switch (e.style()) {
+                case TELEPORT -> teleportAnimation(v, start, end);
+                case LEAP -> leapAnimation(v, start, end);
+                default -> stepAnimation(v, start, e.path(), e.style());
+            };
         });
     }
+
+    private Animation stepAnimation(FighterView v, Cell origin, List<Cell> path, MoveStyle style) {
+        boolean slide = style == MoveStyle.PUSHED || style == MoveStyle.PULLED;
+        double step = style == MoveStyle.WALK ? WALK_STEP : slide ? SLIDE_STEP : DASH_STEP;
+        double hopHeight = style == MoveStyle.WALK ? 7 : style == MoveStyle.DASH ? 3 : 0;
+        List<Animation> steps = new ArrayList<>();
+        if (style == MoveStyle.WALK) steps.add(call(() -> Sfx.MOVE.play(sound)));
+        Cell from = origin;
+        for (Cell to : path) {
+            Cell a = from;
+            if (!slide) steps.add(call(() -> v.face(a, to)));
+            steps.add(tween(step, t -> {
+                double k = style == MoveStyle.WALK ? t : Easing.inOutQuad(t);
+                v.setGridPosition(Easing.lerp(a.x(), to.x(), k), Easing.lerp(a.y(), to.y(), k), Math.sin(t * Math.PI) * hopHeight);
+            }));
+            from = to;
+        }
+        Cell last = path.get(path.size() - 1);
+        steps.add(call(() -> v.snapTo(last)));
+        return sequence(steps.toArray(Animation[]::new));
+    }
+
+    private Animation teleportAnimation(FighterView v, Cell from, Cell to) {
+        return sequence(
+                call(() -> {
+                    Sfx.TELEPORT.play(sound);
+                    burst(from, "fx/arcane", 0.3, 0.8, 0.35, 0);
+                }),
+                tween(0.18, t -> v.setFade(1 - t)),
+                call(() -> {
+                    v.face(from, to);
+                    v.snapTo(to);
+                    burst(to, "fx/arcane", 0.3, 0.8, 0.35, 0);
+                }),
+                tween(0.18, v::setFade));
+    }
+
+    private Animation leapAnimation(FighterView v, Cell from, Cell to) {
+        return sequence(
+                call(() -> {
+                    v.face(from, to);
+                    Sfx.MOVE.play(sound);
+                }),
+                tween(0.36, t -> v.setGridPosition(Easing.lerp(from.x(), to.x(), t), Easing.lerp(from.y(), to.y(), t),
+                        Math.sin(t * Math.PI) * 34)),
+                call(() -> {
+                    v.snapTo(to);
+                    Point2D.Double p = v.worldFeet();
+                    scene.effects().add(new RingPulse(p.x, p.y, new Color(230, 220, 190), 0.4));
+                }));
+    }
+
+    // ------------------------------------------------------------------ sorts
 
     private Animation spellCast(BattleEvent.SpellCast e) {
         FighterView caster = view(e.caster());
         Cell target = e.target();
         Animation face = call(() -> {
-            Cell from = e.caster().position().equals(target) ? null : new Cell((int) Math.round(caster.gx()), (int) Math.round(caster.gy()));
-            if (from != null) caster.face(from, target);
+            Cell from = caster.cell();
+            if (!from.equals(target)) caster.face(from, target);
         });
-        CastStyle style = e.spell().style();
-        return switch (style) {
-            case MELEE -> sequence(face, call(() -> {
+        return switch (e.spell().style()) {
+            case MELEE, STUN_STRIKE, PUSH_STRIKE -> sequence(face, call(() -> {
                 Sfx.MELEE.play(sound);
                 caster.lunge();
             }), delay(0.12));
+            case DASH -> sequence(face, call(() -> Sfx.CHARGE.play(sound)));
+            case GRAPPLE -> sequence(face, call(() -> Sfx.GRAPPLE.play(sound)), tether(caster, target));
             case ARCANE_BOLT -> sequence(face, call(() -> Sfx.PROJECTILE.play(sound)),
-                    projectile(caster, target, "fx/arcane", 0.34, 26, 0.5, false),
+                    projectile(caster, target, assets.image("fx/arcane"), 0.34, 26, 0.5, false),
                     call(() -> burst(target, "fx/arcane", 0.4, 0.9, 0.35, 0)));
+            case POISON -> sequence(face, call(() -> Sfx.POISON.play(sound)),
+                    projectile(caster, target, assets.tinted(assets.image("fx/arcane"), "poison", UiTheme.POISON), 0.38, 30, 0.45, false),
+                    call(() -> scene.effects().add(new Burst(assets.tinted(assets.image("fx/arcane"), "poison", UiTheme.POISON),
+                            Iso.worldX(target.x(), target.y()), Iso.worldY(target.x(), target.y()) - 16, 0.4, 0.9, 0.4, 0))));
             case FIREBALL -> sequence(face, call(() -> Sfx.FIREBALL.play(sound)),
-                    projectile(caster, target, "fx/fire_projectile", 0.42, 34, 0.6, true),
+                    projectile(caster, target, assets.image("fx/fire_projectile"), 0.42, 34, 0.6, true),
                     call(() -> {
                         Sfx.FIREBALL_IMPACT.play(sound);
                         for (Cell c : e.impact()) {
@@ -142,17 +202,25 @@ final class BattlePresenter implements Consumer<BattleEvent> {
                             burst(c, "fx/fire_explosion", center ? 0.45 : 0.3, center ? 1.35 : 0.95, 0.45, center ? 0 : 0.06);
                         }
                     }), delay(0.15));
-            case DASH -> sequence(face, call(() -> Sfx.CHARGE.play(sound)));
+            case ARROW, RECOIL_ARROW -> sequence(face, call(() -> Sfx.ARROW.play(sound)), arrow(caster, target, 0.3, 18));
+            case ARROW_RAIN -> sequence(face, call(() -> Sfx.ARROW.play(sound)), arrowRain(e.impact()), delay(0.1));
+            case TRAP -> sequence(face, call(() -> {
+                Sfx.TRAP.play(sound);
+                Point2D.Double p = cellPoint(target);
+                scene.effects().add(new RingPulse(p.x, p.y + 16, UiTheme.teamColor(e.caster().team()), 0.5));
+            }), delay(0.15));
             case SHIELD -> sequence(call(() -> {
                 Sfx.BUFF.play(sound);
                 Point2D.Double p = caster.worldFeet();
                 scene.effects().add(new RingPulse(p.x, p.y, UiTheme.SHIELD, 0.6));
             }), delay(0.25));
-            case HEAL -> sequence(call(() -> {
+            case HEAL -> sequence(face, call(() -> {
                 Sfx.BUFF.play(sound);
-                Point2D.Double p = caster.worldFeet();
-                scene.effects().add(new RingPulse(p.x, p.y, UiTheme.HEAL, 0.6));
+                Point2D.Double p = cellPoint(target);
+                scene.effects().add(new RingPulse(p.x, p.y + 16, UiTheme.HEAL, 0.6));
             }), delay(0.15));
+            case TELEPORT, LEAP -> face;
+            case COLLISION, TRAP_TRIGGER, POISON_TICK -> call(() -> { });
         };
     }
 
@@ -160,17 +228,23 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         return sequence(call(() -> {
             FighterView v = view(e.target());
             Point2D.Double feet = v.worldFeet();
-            if (e.style() == CastStyle.MELEE || e.style() == CastStyle.DASH) {
-                FighterView src = view(e.source());
-                scene.effects().add(new Slash(feet.x, feet.y, src.gx() > v.gx() || src.gy() < v.gy()));
+            switch (e.style()) {
+                case MELEE, STUN_STRIKE, PUSH_STRIKE, DASH -> {
+                    FighterView src = view(e.source());
+                    scene.effects().add(new Slash(feet.x, feet.y, src.gx() > v.gx() || src.gy() < v.gy()));
+                    if (e.style() == CastStyle.DASH) Sfx.CHARGE_IMPACT.play(sound);
+                }
+                case COLLISION -> Sfx.COLLISION.play(sound);
+                default -> { }
             }
-            if (e.style() == CastStyle.DASH) Sfx.CHARGE_IMPACT.play(sound);
             Sfx.HIT.play(sound, 0.05);
             v.flashDamage();
             v.setShownHp(e.hpAfter());
             Point2D.Double head = v.worldHead();
-            scene.effects().add(new FloatingText("-" + e.amount(), head.x, head.y,
-                    e.heavy() ? UiTheme.DAMAGE_HEAVY : UiTheme.DAMAGE, e.heavy() ? 30 : 24));
+            Color color = e.style() == CastStyle.POISON_TICK ? UiTheme.POISON
+                    : e.heavy() ? UiTheme.DAMAGE_HEAVY : UiTheme.DAMAGE;
+            String text = "-" + e.amount() + (e.style() == CastStyle.COLLISION ? " choc" : "");
+            scene.effects().add(new FloatingText(text, head.x, head.y, color, e.heavy() ? 30 : 24));
         }), delay(0.3));
     }
 
@@ -184,13 +258,58 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         }), delay(0.3));
     }
 
-    private Animation shieldChanged(BattleEvent.ShieldChanged e) {
+    private Animation statusChanged(BattleEvent.StatusChanged e) {
         return call(() -> {
             FighterView v = view(e.fighter());
-            v.setShielded(e.active());
+            v.setStatus(e.kind(), e.active());
+            String text = switch (e.kind()) {
+                case SHIELD -> e.active() ? "Bouclier -50 %" : "Bouclier dissipé";
+                case POISON -> e.active() ? "Empoisonné" : null;
+                case SILENCE -> e.active() ? "Silence !" : null;
+                case SILENCE_IMMUNITY -> null;
+            };
+            if (text == null) return;
+            Color color = switch (e.kind()) {
+                case POISON -> UiTheme.POISON;
+                case SILENCE -> UiTheme.SILENCE;
+                default -> UiTheme.SHIELD;
+            };
             Point2D.Double head = v.worldHead();
-            scene.effects().add(new FloatingText(e.active() ? "Bouclier -50 %" : "Bouclier dissipé",
-                    head.x, head.y - 4, UiTheme.SHIELD, 16));
+            scene.effects().add(new FloatingText(text, head.x, head.y - 4, color, 16));
+        });
+    }
+
+    private Animation died(BattleEvent.Died e) {
+        return sequence(call(() -> {
+            Sfx.DEATH.play(sound);
+            for (StatusKind k : StatusKind.values()) view(e.fighter()).setStatus(k, false);
+        }), delay(0.4));
+    }
+
+    private Animation obstacleDamaged(BattleEvent.ObstacleDamaged e) {
+        return call(() -> {
+            scene.shakeObstacle(e.cell());
+            if (e.style() != CastStyle.FIREBALL && e.style() != CastStyle.ARROW_RAIN) Sfx.TRAP.play(sound);
+            Point2D.Double p = cellPoint(e.cell());
+            scene.effects().add(new FloatingText("-" + e.amount(), p.x, p.y - 10, new Color(0xD8C8A8), 18));
+        });
+    }
+
+    private Animation obstacleDestroyed(BattleEvent.ObstacleDestroyed e) {
+        return sequence(delay(0.1), call(() -> {
+            Sfx.BREAK.play(sound);
+            scene.removeObstacle(e.cell());
+            burst(e.cell(), "fx/fire_explosion", 0.25, 0.7, 0.35, 0);
+            Point2D.Double p = cellPoint(e.cell());
+            scene.effects().add(new FloatingText("Détruit", p.x, p.y - 4, new Color(0xD8C8A8), 15));
+        }), delay(0.15));
+    }
+
+    private Animation trapTriggered(BattleEvent.TrapTriggered e) {
+        return call(() -> {
+            scene.removeTrap(e.trap());
+            Sfx.TRAP.play(sound);
+            burst(e.trap().cell(), "fx/fire_explosion", 0.25, 0.75, 0.35, 0);
         });
     }
 
@@ -203,22 +322,61 @@ final class BattlePresenter implements Consumer<BattleEvent> {
 
     // ------------------------------------------------------------------ outils
 
-    private Animation projectile(FighterView caster, Cell target, String sprite, double seconds, double arc,
-                                 double scale, boolean orient) {
+    private Animation projectile(FighterView caster, Cell target, java.awt.image.BufferedImage sprite, double seconds,
+                                 double arc, double scale, boolean orient) {
         return defer(() -> {
             Point2D.Double from = caster.worldFeet();
-            double tx = Iso.worldX(target.x(), target.y());
-            double ty = Iso.worldY(target.x(), target.y()) - 22;
-            Projectile p = new Projectile(assets.image(sprite), from.x, from.y - 34, tx, ty, arc, scale, orient);
+            Point2D.Double to = cellPoint(target);
+            Projectile p = new Projectile(sprite, from.x, from.y - 34, to.x, to.y - 6, arc, scale, orient);
             scene.effects().add(p);
             return tween(seconds, p::setProgress);
         });
     }
 
+    private Animation arrow(FighterView caster, Cell target, double seconds, double arc) {
+        return defer(() -> {
+            Point2D.Double from = caster.worldFeet();
+            Point2D.Double to = cellPoint(target);
+            Arrow a = new Arrow(from.x, from.y - 36, to.x, to.y - 8, arc, UiTheme.teamColor(caster.fighter().team()));
+            scene.effects().add(a);
+            return tween(seconds, a::setProgress);
+        });
+    }
+
+    /** Une flèche tombe du ciel sur chaque case de la zone, légèrement décalées dans le temps. */
+    private Animation arrowRain(List<Cell> cells) {
+        List<Animation> drops = new ArrayList<>();
+        for (int i = 0; i < cells.size(); i++) {
+            Cell c = cells.get(i);
+            double wait = i * 0.035;
+            drops.add(sequence(delay(wait), defer(() -> {
+                Point2D.Double to = cellPoint(c);
+                Arrow a = new Arrow(to.x - 40, to.y - 230, to.x, to.y + 6, 0, UiTheme.GOLD);
+                scene.effects().add(a);
+                return tween(0.3, a::setProgress);
+            })));
+        }
+        return parallel(drops.toArray(Animation[]::new));
+    }
+
+    private Animation tether(FighterView caster, Cell target) {
+        return defer(() -> {
+            Point2D.Double from = caster.worldFeet();
+            Point2D.Double to = cellPoint(target);
+            Tether t = new Tether(from.x, from.y - 30, to.x, to.y - 4);
+            scene.effects().add(t);
+            return tween(0.3, t::setProgress);
+        });
+    }
+
+    /** Centre d'une case, à hauteur de poitrine d'un combattant. */
+    private static Point2D.Double cellPoint(Cell c) {
+        return new Point2D.Double(Iso.worldX(c.x(), c.y()), Iso.worldY(c.x(), c.y()) - 20);
+    }
+
     private void burst(Cell cell, String sprite, double from, double to, double seconds, double delaySeconds) {
-        double x = Iso.worldX(cell.x(), cell.y());
-        double y = Iso.worldY(cell.x(), cell.y()) - 16;
-        scene.effects().add(new Burst(assets.image(sprite), x, y, from, to, seconds, delaySeconds));
+        Point2D.Double p = cellPoint(cell);
+        scene.effects().add(new Burst(assets.image(sprite), p.x, p.y + 4, from, to, seconds, delaySeconds));
     }
 
     private FighterView view(Fighter f) {
