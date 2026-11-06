@@ -91,6 +91,9 @@ public final class MapTests {
         Check.that(same, "même graine : même terrain");
         Check.that(!a1.decor().equals(MapGenerator.generate(MapTheme.FOREST, 43).decor()), "graines différentes : cartes différentes");
         long trees = a1.decor().stream().filter(d -> d.kind().role() == DecorKind.Role.TREE).count();
-        Check.equal((long) MapTheme.FOREST.trees(), trees, "nombre d'arbres demandé atteint");
+        Check.equal(0L, trees, "forêt illustrée : aucun décor généré autour de l'arène");
+        Arena lake = MapGenerator.generate(MapTheme.LAKE, 42);
+        long lakeTrees = lake.decor().stream().filter(d -> d.kind().role() == DecorKind.Role.TREE).count();
+        Check.equal((long) MapTheme.LAKE.trees(), lakeTrees, "nombre d'arbres demandé atteint (lac)");
     }
 }

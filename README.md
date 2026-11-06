@@ -91,7 +91,7 @@ anticipe aussi la riposte adverse.
 
 | Carte | Biome | Particularité |
 |---|---|---|
-| Clairière forestière | prairie | rochers et rondins |
+| Clairière forestière | prairie | illustration de plateau en forêt (sol et décor), rochers et rondins |
 | Ruines anciennes | prairie | chemin pavé, caisses |
 | Bord de lac | prairie | étang infranchissable |
 | Col enneigé | neige | lac gelé (praticable), sapins enneigés, flocons |
@@ -187,6 +187,11 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   conversion OGG → WAV car Java ne lit pas l'OGG). Il fabrique aussi ce que le pack ne contient pas :
   sols de neige, de sable et de crypte (recoloration des tuiles d'herbe et de pierre), sapins enneigés,
   cactus dessinés, Archère (recoloration du Mage). Nécessite Python 3 (Pillow, numpy, scipy) et ffmpeg.
+- **Illustrations fournies** : `tools/import_sources.py` importe les fichiers de `tools/source/` :
+  la planche de l'Archère (détourage, choix des poses de repos et de marche, alignement des pieds,
+  portrait) et le fond de la forêt (rochers peints effacés dans l'aire de jeu, bords prolongés, calage de
+  la grille dans `backdrops/forest.properties`). Pour une nouvelle carte illustrée : ajouter l'image,
+  l'importer de la même façon et indiquer son nom dans `MapTheme`.
 - **Ambiances sonores** : `tools/ambience.py` les synthétise (bruit filtré et oscillateurs, boucles de
   16 s sans couture). Aucun fichier extérieur ; modifiez le script pour changer le caractère d'une carte.
 

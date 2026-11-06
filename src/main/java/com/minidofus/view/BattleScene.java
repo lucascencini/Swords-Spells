@@ -30,6 +30,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Rendu du monde. Le sol (tuiles, quadrillage, fleurs) est peint une fois pour toutes dans une image ;
@@ -50,6 +51,10 @@ public final class BattleScene {
     private final List<Trap> traps = new ArrayList<>();
     private final List<Object> drawOrder = new ArrayList<>();
     private BufferedImage ground;
+    /** Illustration de fond (cartes illustrées), placée dans le repère du monde ; {@code null} sinon. */
+    private BufferedImage backdrop;
+    private Rectangle2D backdropBounds;
+    private Color backdropFill;
     private Rectangle2D groundBounds;
     private double waterClock;
 
@@ -81,6 +86,7 @@ public final class BattleScene {
         this.arena = arena;
         for (FighterView v : fighterViews) views.put(v.fighter(), v);
         this.particles = new AmbientParticles(arena.theme().biome());
+        loadBackdrop();
         buildGround();
         buildSprites();
     }
@@ -93,6 +99,42 @@ public final class BattleScene {
     public BufferedImage groundImage() { return ground; }
 
     // ------------------------------------------------------------------ construction des caches
+
+    /**
+     * Charge l'illustration de la carte et la place pour que sa zone {@code centerX/centerY} tombe au centre
+     * de la grille, à l'échelle {@code scale} (pixels d'image par unité du monde).
+     */
+    private void loadBackdrop() {
+        String name = arena.theme().backdrop();
+        if (name == null) return;
+        backdrop = assets.image("backdrops/" + name);
+        Properties p = assets.properties("backdrops/" + name + ".properties");
+        double cx = Double.parseDouble(p.getProperty("centerX", "0"));
+        double cy = Double.parseDouble(p.getProperty("centerY", "0"));
+        double scale = Double.parseDouble(p.getProperty("scale", "1"));
+        int n = arena.board().size();
+        double gridCenterY = Iso.worldY(n - 1, n - 1) / 2.0;
+        backdropBounds = new Rectangle2D.Double(-cx / scale, gridCenterY - cy / scale,
+                backdrop.getWidth() / scale, backdrop.getHeight() / scale);
+        backdropFill = averageEdgeColor(backdrop);
+    }
+
+    private static Color averageEdgeColor(BufferedImage img) {
+        long r = 0;
+        long g = 0;
+        long b = 0;
+        int count = 0;
+        for (int x = 0; x < img.getWidth(); x += 8) {
+            for (int y : new int[] {0, img.getHeight() - 1}) {
+                int c = img.getRGB(x, y);
+                r += (c >> 16) & 255;
+                g += (c >> 8) & 255;
+                b += c & 255;
+                count++;
+            }
+        }
+        return new Color((int) (r / count), (int) (g / count), (int) (b / count));
+    }
 
     private void buildGround() {
         Board board = arena.board();
@@ -111,6 +153,8 @@ public final class BattleScene {
         for (int sum = 0; sum <= 2 * (n - 1); sum++) {           // de l'arrière vers l'avant
             for (int x = Math.max(0, sum - n + 1); x <= Math.min(n - 1, sum); x++) {
                 int y = sum - x;
+                // carte illustrée : le sol est l'illustration, seules les cases spéciales ont une tuile
+                if (backdrop != null && board.terrain(x, y) == Terrain.GRASS) continue;
                 String tile = tileFor(board.terrain(x, y), board.variant(x, y));
                 BufferedImage img = assets.image(tile);
                 g.drawImage(img, (int) Math.round(Iso.worldX(x, y) - Iso.TILE_ANCHOR_X),
@@ -120,17 +164,35 @@ public final class BattleScene {
 
         g.setStroke(new BasicStroke(1f));
         boolean darkGround = arena.theme().biome() == Biome.DUNGEON;
-        g.setColor(darkGround ? new Color(255, 230, 200, 26) : new Color(20, 40, 10, 38));
+        g.setColor(darkGround ? new Color(255, 230, 200, 26) : backdrop != null ? new Color(25, 45, 10, 70) : new Color(20, 40, 10, 38));
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
                 if (board.terrain(x, y) != Terrain.WATER) g.draw(diamond(x, y, 0));
             }
         }
 
+        if (backdrop != null) drawArenaOutline(g, n);
         for (DecorPlacement d : arena.decor()) {
             if (d.kind().role() == DecorKind.Role.FLOWER) drawDecor(g, d);
         }
         g.dispose();
+    }
+
+    /** Contour de l'aire de jeu, utile quand le sol illustré déborde de la grille. */
+    private static void drawArenaOutline(Graphics2D g, int n) {
+        Path2D.Double outline = new Path2D.Double();
+        outline.moveTo(Iso.worldX(0, 0), Iso.worldY(0, 0) - Iso.HALF_H);
+        outline.lineTo(Iso.worldX(n - 1, 0) + Iso.HALF_W, Iso.worldY(n - 1, 0));
+        outline.lineTo(Iso.worldX(n - 1, n - 1), Iso.worldY(n - 1, n - 1) + Iso.HALF_H);
+        outline.lineTo(Iso.worldX(0, n - 1) - Iso.HALF_W, Iso.worldY(0, n - 1));
+        outline.closePath();
+        g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(new Color(20, 35, 10, 70));
+        g.draw(outline);
+        g.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(new Color(255, 240, 190, 120));
+        g.draw(outline);
+        g.setStroke(new BasicStroke(1f));
     }
 
     /** Tuile à utiliser pour une case, selon le biome de la carte. */
@@ -210,10 +272,19 @@ public final class BattleScene {
     }
 
     public void draw(Graphics2D g, Camera camera, int width, int height, Highlights highlights, Fighter active) {
-        g.drawImage(background.get(width, height, arena.seed(), arena.theme().biome()), 0, 0, null);
+        if (backdrop != null) {
+            g.setColor(backdropFill);
+            g.fillRect(0, 0, width, height);
+        } else {
+            g.drawImage(background.get(width, height, arena.seed(), arena.theme().biome()), 0, 0, null);
+        }
 
         AffineTransform screen = g.getTransform();
         g.transform(camera.transform());
+        if (backdrop != null) {
+            g.drawImage(backdrop, (int) Math.round(backdropBounds.getX()), (int) Math.round(backdropBounds.getY()),
+                    (int) Math.round(backdropBounds.getWidth()), (int) Math.round(backdropBounds.getHeight()), null);
+        }
 
         g.drawImage(ground, (int) Math.round(groundBounds.getX()), (int) Math.round(groundBounds.getY()), null);
         drawWaterShimmer(g);

@@ -76,6 +76,9 @@ public final class Assets {
 
     private BufferedImage load(String path) {
         String resource = "/" + path + ".png";
+        if (Assets.class.getResource(resource) == null && Assets.class.getResource("/" + path + ".jpg") != null) {
+            resource = "/" + path + ".jpg"; // illustrations de fond, plus légères en JPEG
+        }
         try (InputStream in = Assets.class.getResourceAsStream(resource)) {
             if (in != null) {
                 BufferedImage raw = ImageIO.read(in);

@@ -136,7 +136,9 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         double step = style == MoveStyle.WALK ? WALK_STEP : slide ? SLIDE_STEP : DASH_STEP;
         double hopHeight = style == MoveStyle.WALK ? 7 : style == MoveStyle.DASH ? 3 : 0;
         List<Animation> steps = new ArrayList<>();
+        boolean walk = style == MoveStyle.WALK || style == MoveStyle.DASH;
         if (style == MoveStyle.WALK) steps.add(call(() -> Sfx.MOVE.play(sound)));
+        if (walk) steps.add(call(() -> v.setWalking(true)));
         Cell from = origin;
         for (Cell to : path) {
             Cell a = from;
@@ -148,7 +150,10 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             from = to;
         }
         Cell last = path.get(path.size() - 1);
-        steps.add(call(() -> v.snapTo(last)));
+        steps.add(call(() -> {
+            v.snapTo(last);
+            v.setWalking(false);
+        }));
         return sequence(steps.toArray(Animation[]::new));
     }
 

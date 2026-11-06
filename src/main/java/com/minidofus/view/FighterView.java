@@ -19,6 +19,7 @@ import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -28,7 +29,8 @@ import java.util.Set;
  */
 public final class FighterView {
 
-    private static final double SPRITE_SCALE = 0.95;
+    /** Images de marche par case parcourue (cycle de 4 images = 2 cases). */
+    private static final double WALK_FRAMES_PER_CELL = 2.0;
 
     private final Fighter fighter;
     private double gx;
@@ -47,6 +49,8 @@ public final class FighterView {
     private Color castColor = Color.WHITE;
     private double deathProgress;
     private double stepPhase;
+    private boolean walking;
+    private double walkDistance;
 
     public FighterView(Fighter fighter, Facing initialFacing) {
         this.fighter = fighter;
@@ -86,8 +90,16 @@ public final class FighterView {
     /** Opacité (0 à 1) utilisée par la téléportation. */
     public void setFade(double fade) { this.fade = fade; }
 
+    /** Pendant un déplacement à pied : active le cycle de marche (classes qui en ont un). */
+    public void setWalking(boolean walking) {
+        this.walking = walking;
+        if (!walking) walkDistance = 0;
+    }
+
     public void setGridPosition(double x, double y, double hop) {
-        if (hop > 0) stepPhase += Math.hypot(x - gx, y - gy) * Math.PI;
+        double d = Math.hypot(x - gx, y - gy);
+        walkDistance += d;
+        if (hop > 0) stepPhase += d * Math.PI;
         this.gx = x;
         this.gy = y;
         this.hop = hop;
@@ -152,8 +164,17 @@ public final class FighterView {
     public void draw(Graphics2D g, Assets assets, PoseTable poses) {
         if (deathProgress >= 1) return;
         Point2D.Double feet = worldFeet();
-        BufferedImage img = poses.image(fighter.classId(), facing);
-        boolean idle = hop == 0 && shownHp > 0 && deathProgress == 0;
+        String classId = fighter.classId();
+        boolean animatedWalk = poses.hasWalk(classId);
+        BufferedImage img = poses.image(classId, facing);
+        if (walking && animatedWalk) {
+            List<BufferedImage> frames = poses.walk(classId, facing);
+            img = frames.get((int) (walkDistance * WALK_FRAMES_PER_CELL) % frames.size());
+        }
+        // avec un vrai cycle de marche, plus besoin de petits bonds ni de balancement
+        double hop = animatedWalk && walking ? this.hop * 0.15 : this.hop;
+        double spriteScale = poses.scale(classId);
+        boolean idle = hop == 0 && !walking && shownHp > 0 && deathProgress == 0;
         double breathe = idle ? Math.sin(clock * 2.6) : 0;
         double lungeOffset = Math.sin(lunge * Math.PI) * 6;
         double recoil = flashDamage > 0 ? Math.sin(flashDamage * Math.PI * 4) * 2.5 * flashDamage : 0;
@@ -161,8 +182,8 @@ public final class FighterView {
         double dirY = facing == Facing.SE || facing == Facing.SW ? 1 : -1;
 
         double cast = castGlow > 0 ? Math.sin(Math.min(1, castGlow) * Math.PI) : 0;
-        double w = img.getWidth() * SPRITE_SCALE * (1 + cast * 0.05);
-        double h = img.getHeight() * SPRITE_SCALE * (1 + breathe * 0.012 + cast * 0.07);
+        double w = img.getWidth() * spriteScale * (1 + cast * 0.05);
+        double h = img.getHeight() * spriteScale * (1 + breathe * 0.012 + cast * 0.07);
         double x = -w / 2 + dirX * lungeOffset + recoil;
         double y = -h * 0.94 - hop + dirY * lungeOffset * 0.5;
 
@@ -171,7 +192,7 @@ public final class FighterView {
         AffineTransform saved = g.getTransform();
         Composite savedComposite = g.getComposite();
         g.translate(feet.x, feet.y);
-        double tilt = hop > 0 ? Math.sin(stepPhase) * 0.07 : 0;
+        double tilt = hop > 0 && !animatedWalk ? Math.sin(stepPhase) * 0.07 : 0;
         if (deathProgress > 0) {
             double fall = Math.min(1, deathProgress / 0.55);
             tilt = dirX * fall * fall * 1.35;
@@ -228,7 +249,7 @@ public final class FighterView {
         if (strength <= 0.01) return;
         Composite saved = g.getComposite();
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) Math.min(1, strength)));
-        BufferedImage tint = assets.tinted(img, fighter.classId() + facing, color);
+        BufferedImage tint = assets.tinted(img, "pose@" + System.identityHashCode(img), color);
         g.drawImage(tint, (int) Math.round(x), (int) Math.round(y), (int) Math.round(w), (int) Math.round(h), null);
         g.setComposite(saved);
     }
