@@ -52,6 +52,8 @@ public final class FighterView {
     private boolean walking;
     private double walkDistance;
 
+    private Projection projection = Projection.ISO;
+
     public FighterView(Fighter fighter, Facing initialFacing) {
         this.fighter = fighter;
         this.gx = fighter.position().x();
@@ -129,13 +131,23 @@ public final class FighterView {
     }
 
     public Point2D.Double worldFeet() {
-        return new Point2D.Double(Iso.worldX(gx, gy), Iso.worldY(gx, gy));
+        return projection.point(gx, gy);
+    }
+
+    /** Projection de la carte (perspective sur une carte illustrée). */
+    public void setProjection(Projection projection) {
+        this.projection = projection;
+    }
+
+    /** Réduction due à la perspective à l'endroit où se tient le combattant (1 en isométrique). */
+    public double depthScale() {
+        return projection.scaleAt(gx, gy);
     }
 
     /** Point au-dessus de la tête (chiffres de dégâts, origine des projectiles). */
     public Point2D.Double worldHead() {
         Point2D.Double p = worldFeet();
-        return new Point2D.Double(p.x, p.y - 62 - hop);
+        return new Point2D.Double(p.x, p.y - (62 + hop) * depthScale());
     }
 
     /** Ombre et anneau d'équipe (épais et pulsé pour le combattant actif) ; petite stèle une fois mort. */

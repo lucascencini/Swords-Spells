@@ -56,6 +56,8 @@ public final class BattleScene {
     private Rectangle2D backdropBounds;
     private Color backdropFill;
     private SkyLayer sky;
+    /** Grille → monde : isométrie, ou perspective calée sur le plateau d'une carte illustrée. */
+    private Projection projection = Projection.ISO;
     private double skyBottomY;
     private Rectangle2D groundBounds;
     private double waterClock;
@@ -89,6 +91,7 @@ public final class BattleScene {
         for (FighterView v : fighterViews) views.put(v.fighter(), v);
         this.particles = new AmbientParticles(arena.theme().biome());
         loadBackdrop();
+        for (FighterView v : views.values()) v.setProjection(projection);
         buildGround();
         buildSprites();
     }
@@ -96,6 +99,7 @@ public final class BattleScene {
     public FighterView view(Fighter f) { return views.get(f); }
     public Iterable<FighterView> views() { return views.values(); }
     public EffectLayer effects() { return effects; }
+    public Projection projection() { return projection; }
     public Rectangle2D arenaBounds() { return groundBounds; }
     /** Sol précalculé de l'arène (aperçu de carte). */
     public BufferedImage groundImage() { return ground; }
@@ -119,12 +123,24 @@ public final class BattleScene {
         backdropBounds = new Rectangle2D.Double(-cx / scale, gridCenterY - cy / scale,
                 backdrop.getWidth() / scale, backdrop.getHeight() / scale);
         backdropFill = averageEdgeColor(backdrop);
+        // perspective : coins extérieurs de la grille sur l'illustration (pixels de l'image)
+        if (p.getProperty("grid.top") != null) {
+            projection = Projection.fromCorners(imagePoint(p, "grid.top", scale), imagePoint(p, "grid.right", scale),
+                    imagePoint(p, "grid.bottom", scale), imagePoint(p, "grid.left", scale), n);
+        }
         String skyName = p.getProperty("sky");
         if (skyName != null) {
             sky = new SkyLayer(assets, skyName.trim(), Integer.parseInt(p.getProperty("skyFrames", "1").trim()));
             skyBottomY = backdropBounds.getY() + Double.parseDouble(p.getProperty("skyBottom", "0")) / scale;
             backdropFill = sky.topColor();
         }
+    }
+
+    /** Point « x, y » en pixels de l'illustration, converti en coordonnées du monde. */
+    private Point2D.Double imagePoint(Properties p, String key, double scale) {
+        String[] xy = p.getProperty(key).split(",");
+        return new Point2D.Double(backdropBounds.getX() + Double.parseDouble(xy[0].trim()) / scale,
+                backdropBounds.getY() + Double.parseDouble(xy[1].trim()) / scale);
     }
 
     private static Color averageEdgeColor(BufferedImage img) {
@@ -147,10 +163,11 @@ public final class BattleScene {
     private void buildGround() {
         Board board = arena.board();
         int n = board.size();
-        double minX = Iso.worldX(0, n - 1) - Iso.TILE_ANCHOR_X;
-        double maxX = Iso.worldX(n - 1, 0) + Iso.TILE_ANCHOR_X;
-        double minY = Iso.worldY(0, 0) - Iso.TILE_ANCHOR_Y;
-        double maxY = Iso.worldY(n - 1, n - 1) + 40;
+        Rectangle2D grid = projection.outline(n).getBounds2D();
+        double minX = grid.getMinX() - 2;
+        double maxX = grid.getMaxX() + 2;
+        double minY = grid.getMinY() - 4;
+        double maxY = grid.getMaxY() + 24;
         groundBounds = new Rectangle2D.Double(minX, minY, maxX - minX, maxY - minY);
 
         ground = Assets.createImage((int) Math.ceil(groundBounds.getWidth()), (int) Math.ceil(groundBounds.getHeight()));
@@ -165,8 +182,10 @@ public final class BattleScene {
                 if (backdrop != null && board.terrain(x, y) == Terrain.GRASS) continue;
                 String tile = tileFor(board.terrain(x, y), board.variant(x, y));
                 BufferedImage img = assets.image(tile);
-                g.drawImage(img, (int) Math.round(Iso.worldX(x, y) - Iso.TILE_ANCHOR_X),
-                        (int) Math.round(Iso.worldY(x, y) - Iso.TILE_ANCHOR_Y), null);
+                double ts = projection.scaleAt(x, y);
+                g.drawImage(img, (int) Math.round(projection.x(x, y) - Iso.TILE_ANCHOR_X * ts),
+                        (int) Math.round(projection.y(x, y) - Iso.TILE_ANCHOR_Y * ts),
+                        (int) Math.round(img.getWidth() * ts), (int) Math.round(img.getHeight() * ts), null);
             }
         }
 
@@ -178,11 +197,11 @@ public final class BattleScene {
                 : new Color(20, 40, 10, 38));
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
-                if (board.terrain(x, y) != Terrain.WATER) g.draw(diamond(x, y, 0));
+                if (board.terrain(x, y) != Terrain.WATER) g.draw(projection.cell(x, y, 0));
             }
         }
 
-        if (backdrop != null) drawArenaOutline(g, n);
+        if (backdrop != null) drawArenaOutline(g, projection.outline(n));
         for (DecorPlacement d : arena.decor()) {
             if (d.kind().role() == DecorKind.Role.FLOWER) drawDecor(g, d);
         }
@@ -190,13 +209,7 @@ public final class BattleScene {
     }
 
     /** Contour de l'aire de jeu, utile quand le sol illustré déborde de la grille. */
-    private static void drawArenaOutline(Graphics2D g, int n) {
-        Path2D.Double outline = new Path2D.Double();
-        outline.moveTo(Iso.worldX(0, 0), Iso.worldY(0, 0) - Iso.HALF_H);
-        outline.lineTo(Iso.worldX(n - 1, 0) + Iso.HALF_W, Iso.worldY(n - 1, 0));
-        outline.lineTo(Iso.worldX(n - 1, n - 1), Iso.worldY(n - 1, n - 1) + Iso.HALF_H);
-        outline.lineTo(Iso.worldX(0, n - 1) - Iso.HALF_W, Iso.worldY(0, n - 1));
-        outline.closePath();
+    private static void drawArenaOutline(Graphics2D g, Path2D outline) {
         g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.setColor(new Color(20, 35, 10, 70));
         g.draw(outline);
@@ -230,12 +243,12 @@ public final class BattleScene {
             if (d.kind().role() == DecorKind.Role.FLOWER) continue;
             BufferedImage img = d.mirrored() ? assets.mirrored("decor/" + d.kind().spriteKey())
                     : assets.image("decor/" + d.kind().spriteKey());
-            double s = d.finalScale();
+            double s = d.finalScale() * projection.scaleAt(d.x(), d.y());
             double w = img.getWidth() * s;
             double h = img.getHeight() * s;
             double anchorY = d.kind().role() == DecorKind.Role.TREE ? 0.93 : 0.80;
-            double wx = Iso.worldX(d.x(), d.y());
-            double wy = Iso.worldY(d.x(), d.y());
+            double wx = projection.x(d.x(), d.y());
+            double wy = projection.y(d.x(), d.y());
             Cell cell = d.kind().isBlocking() ? new Cell((int) Math.round(d.x()), (int) Math.round(d.y())) : null;
             sprites.add(new DecorSprite(img, wx - w / 2, wy - h * anchorY, w, h, d.x() + d.y(), cell));
             if (d.kind().isLight()) lights.add(new Point2D.Double(wx, wy - h * anchorY + 10));
@@ -246,11 +259,11 @@ public final class BattleScene {
     private void drawDecor(Graphics2D g, DecorPlacement d) {
         BufferedImage img = d.mirrored() ? assets.mirrored("decor/" + d.kind().spriteKey())
                 : assets.image("decor/" + d.kind().spriteKey());
-        double s = d.finalScale();
+        double s = d.finalScale() * projection.scaleAt(d.x(), d.y());
         double w = img.getWidth() * s;
         double h = img.getHeight() * s;
-        double wx = Iso.worldX(d.x(), d.y());
-        double wy = Iso.worldY(d.x(), d.y());
+        double wx = projection.x(d.x(), d.y());
+        double wy = projection.y(d.x(), d.y());
         g.drawImage(img, (int) Math.round(wx - w / 2), (int) Math.round(wy - h * 0.75), (int) Math.round(w), (int) Math.round(h), null);
     }
 
@@ -304,7 +317,11 @@ public final class BattleScene {
         drawLights(g);
         drawHighlights(g, highlights);
         for (Trap t : traps) drawTrap(g, t);
-        for (FighterView v : views.values()) v.drawGroundMarks(g, v.fighter() == active);
+        for (FighterView v : views.values()) {
+            AffineTransform t = scaledAtFeet(g, v);
+            v.drawGroundMarks(g, v.fighter() == active);
+            g.setTransform(t);
+        }
 
         // tri en profondeur : décor (déjà trié) fusionné avec les combattants
         drawOrder.clear();
@@ -317,7 +334,10 @@ public final class BattleScene {
                 g.drawImage(s.image, (int) Math.round(s.x + dx), (int) Math.round(s.y),
                         (int) Math.round(s.w), (int) Math.round(s.h), null);
             } else {
-                ((FighterView) o).draw(g, assets, poses);
+                FighterView v = (FighterView) o;
+                AffineTransform t = scaledAtFeet(g, v);
+                v.draw(g, assets, poses);
+                g.setTransform(t);
             }
         }
 
@@ -326,6 +346,19 @@ public final class BattleScene {
         particles.draw(g, width, height);
         effects.drawScreen(g, camera);
         drawPathLabel(g, camera, highlights);
+    }
+
+    /** Réduit le dessin d'un combattant selon la profondeur (perspective) ; renvoie la transformation d'avant. */
+    private static AffineTransform scaledAtFeet(Graphics2D g, FighterView v) {
+        AffineTransform before = g.getTransform();
+        double s = v.depthScale();
+        if (s != 1) {
+            Point2D.Double feet = v.worldFeet();
+            g.translate(feet.x, feet.y);
+            g.scale(s, s);
+            g.translate(-feet.x, -feet.y);
+        }
+        return before;
     }
 
     /** Halo vacillant des torches, posé sur le sol. */
@@ -380,8 +413,13 @@ public final class BattleScene {
 
     /** Piège : cercle denté aux couleurs de l'équipe du poseur. */
     private void drawTrap(Graphics2D g, Trap trap) {
-        double cx = Iso.worldX(trap.cell().x(), trap.cell().y());
-        double cy = Iso.worldY(trap.cell().x(), trap.cell().y());
+        double cx = projection.x(trap.cell().x(), trap.cell().y());
+        double cy = projection.y(trap.cell().x(), trap.cell().y());
+        AffineTransform before = g.getTransform();
+        double ts = projection.scaleAt(trap.cell().x(), trap.cell().y());
+        g.translate(cx, cy);
+        g.scale(ts, ts);
+        g.translate(-cx, -cy);
         Color team = UiTheme.teamColor(trap.owner().team());
         double pulse = 0.5 + 0.5 * Math.sin(waterClock * 3);
         g.setColor(new Color(30, 20, 10, 150));
@@ -404,34 +442,25 @@ public final class BattleScene {
         g.setStroke(new BasicStroke(1.2f));
         g.draw(teeth);
         g.setStroke(new BasicStroke(1f));
+        g.setTransform(before);
     }
 
     private void drawPathLabel(Graphics2D g, Camera camera, Highlights h) {
         if (h.label() == null || h.labelCell() == null) return;
-        Point2D.Double p = camera.toScreen(Iso.worldX(h.labelCell().x(), h.labelCell().y()),
-                Iso.worldY(h.labelCell().x(), h.labelCell().y()));
+        Point2D.Double p = camera.toScreen(projection.x(h.labelCell().x(), h.labelCell().y()),
+                projection.y(h.labelCell().x(), h.labelCell().y()));
         UiTheme.drawOutlinedCentered(g, h.label(), UiTheme.BODY_BOLD.deriveFont(14f), p.x, p.y + 5,
                 h.labelColor(), new Color(0, 0, 0, 200));
     }
 
     /** Losange d'une case, rétréci de {@code inset} pixels. */
-    public static Path2D diamond(int x, int y, double inset) {
-        double cx = Iso.worldX(x, y);
-        double cy = Iso.worldY(x, y);
-        double hw = Iso.HALF_W - inset;
-        double hh = Iso.HALF_H - inset * Iso.HALF_H / Iso.HALF_W;
-        Path2D.Double p = new Path2D.Double();
-        p.moveTo(cx, cy - hh);
-        p.lineTo(cx + hw, cy);
-        p.lineTo(cx, cy + hh);
-        p.lineTo(cx - hw, cy);
-        p.closePath();
-        return p;
+    public Path2D diamond(int x, int y, double inset) {
+        return projection.cell(x, y, inset);
     }
 
     /** Case de la grille sous un point du monde (ou {@code null} hors de l'arène). */
     public Cell cellAt(double wx, double wy) {
-        Point2D.Double gp = Iso.toGrid(wx, wy);
+        Point2D.Double gp = projection.toGrid(wx, wy);
         Cell c = new Cell((int) Math.round(gp.x), (int) Math.round(gp.y));
         return arena.board().inBounds(c) ? c : null;
     }

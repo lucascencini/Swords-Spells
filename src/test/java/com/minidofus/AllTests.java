@@ -14,6 +14,7 @@ public final class AllTests {
     public static void main(String[] args) throws Exception {
         BattleTests.run();
         MapTests.run();
+        com.minidofus.view.ProjectionTests.run();
         AiTests.run();
         CommandTests.run();
         NetTests.run();

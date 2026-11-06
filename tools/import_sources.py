@@ -48,6 +48,52 @@ FEET_MARGIN = 0.06          # marge sous les pieds (le jeu ancre les sprites à 
 # grille du jeu : losange de 1050 × 630 unités monde, centré en (0, 294)
 GRID_HALF_W = 525
 GRID_HALF_H = 315
+GRID_N = 15
+
+# coins du plateau peint de la forêt (fond, droite, avant, gauche), à l'intersection des bords visibles ;
+# la pointe avant est hors du cadre
+FOREST_PLATEAU = [(765, 69), (1465, 384), (839, 713), (100, 386)]
+
+
+def perspective_grid(plateau, margin_back, margin_front, max_bottom=None):
+    """
+    Cale la grille de jeu sur le plateau peint, en perspective : les coins du plateau (fond, droite, avant,
+    gauche) correspondent aux coins de la grille agrandie d'une marge (en cases) ; la marge avant augmente
+    si besoin pour que la grille reste au-dessus de {max_bottom}. Renvoie les coins extérieurs de la grille
+    (fond, droite, avant, gauche) en pixels de l'image.
+    """
+    n = GRID_N
+    while True:
+        lo, hi = -0.5 - margin_back, n - 0.5 + margin_front
+        src = np.float32([[lo, lo], [hi, lo], [hi, hi], [lo, hi]])
+        h = cv2.getPerspectiveTransform(src, np.float32(plateau))
+        g = np.float32([[[-0.5, -0.5]], [[n - 0.5, -0.5]], [[n - 0.5, n - 0.5]], [[-0.5, n - 0.5]]])
+        corners = cv2.perspectiveTransform(g, h)[:, 0, :]
+        if max_bottom is None or corners[2][1] <= max_bottom:
+            return corners, h
+        margin_front += 0.05
+
+
+def grid_properties(corners, h, pad, name):
+    """Lignes du fichier .properties : centre, échelle et coins de la grille (image agrandie de {pad})."""
+    center = cv2.perspectiveTransform(np.float32([[[(GRID_N - 1) / 2, (GRID_N - 1) / 2]]]), h)[0, 0]
+    scale = (corners[1][0] - corners[3][0]) / (2 * GRID_HALF_W)  # pixels d'image par unité monde
+    names = ["top", "right", "bottom", "left"]
+    lines = [f"# Placement de la grille sur {name} (généré par tools/import_sources.py)",
+             "# centerX/centerY : pixel sous le centre de la grille ; scale : pixels par unité monde (en moyenne)",
+             f"centerX = {center[0] + pad:.1f}", f"centerY = {center[1] + pad:.1f}", f"scale = {scale:.4f}",
+             "# perspective : coins extérieurs de la grille (fond, droite, avant, gauche), en pixels"]
+    lines += [f"grid.{k} = {c[0] + pad:.1f}, {c[1] + pad:.1f}" for k, c in zip(names, corners)]
+    return "\n".join(lines) + "\n", scale
+
+
+def grid_mask(corners, shape, grow=1.0):
+    """Masque de l'aire de jeu (quadrilatère de la grille), éventuellement agrandi autour de son centre."""
+    c = np.float32(corners)
+    c = c.mean(0) + (c - c.mean(0)) * grow
+    mask = Image.new("L", (shape[1], shape[0]), 0)
+    ImageDraw.Draw(mask).polygon([tuple(p) for p in c], fill=1)
+    return np.array(mask).astype(bool)
 
 
 # ---------------------------------------------------------------------------- archère
@@ -186,7 +232,7 @@ def plateau_mask(img: np.ndarray) -> np.ndarray:
     return ndimage.binary_fill_holes(lab == int(np.argmax(areas)) + 1)
 
 
-def remove_painted_rocks(img: np.ndarray, plateau: np.ndarray, grid) -> np.ndarray:
+def remove_painted_rocks(img: np.ndarray, plateau: np.ndarray, in_grid: np.ndarray) -> np.ndarray:
     """
     Efface les rochers peints dans l'aire de jeu (zones grises peu saturées) : chaque rocher est recouvert
     par un morceau d'herbe voisin, fondu dans l'image par clonage de Poisson (garde la texture peinte).
@@ -194,10 +240,6 @@ def remove_painted_rocks(img: np.ndarray, plateau: np.ndarray, grid) -> np.ndarr
     """
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV).astype(float)
     s, v = hsv[:, :, 1] / 255, hsv[:, :, 2] / 255
-    cx, cy, hw = grid
-    hh = hw * GRID_HALF_H / GRID_HALF_W
-    yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
-    in_grid = (np.abs(xx - cx) / (hw * 1.06) + np.abs(yy - cy) / (hh * 1.06)) <= 1
     rock = (s < 0.30) & (v > 0.2) & (v < 0.95) & plateau
     rock = ndimage.binary_opening(rock, iterations=1)
     lab, n = ndimage.label(rock)
@@ -238,37 +280,6 @@ def remove_painted_rocks(img: np.ndarray, plateau: np.ndarray, grid) -> np.ndarr
     return out
 
 
-def fit_grid(plateau: np.ndarray):
-    """Plus grand losange aux proportions de la grille qui tient dans la partie visible du plateau."""
-    h, w = plateau.shape
-    ys, xs = np.nonzero(plateau)
-    best = None
-    ratio = GRID_HALF_H / GRID_HALF_W
-    for cy in range(int(ys.min()) + 40, h - 40, 4):
-        for cx in range(int(xs.min()) + 40, int(xs.max()) - 40, 6):
-            lo, hi = 50.0, 900.0
-            for _ in range(14):
-                hw = (lo + hi) / 2
-                if diamond_inside(plateau, cx, cy, hw, hw * ratio):
-                    lo = hw
-                else:
-                    hi = hw
-            if best is None or lo > best[2]:
-                best = (cx, cy, lo)
-    return best
-
-
-def diamond_inside(mask, cx, cy, hw, hh):
-    h, w = mask.shape
-    for t in np.linspace(0, 1, 40):
-        for px, py in ((cx - hw + t * hw, cy - t * hh), (cx + t * hw, cy - hh + t * hh),
-                       (cx + hw - t * hw, cy + t * hh), (cx - t * hw, cy + hh - t * hh)):
-            ix, iy = int(round(px)), int(round(py))
-            if ix < 0 or iy < 0 or ix >= w or iy >= h or not mask[iy, ix]:
-                return False
-    return True
-
-
 def extend_borders(img: np.ndarray, pad: int) -> np.ndarray:
     """Agrandit l'image de {pad} pixels de chaque côté : reflet flouté et assombri des bords."""
     big = cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_REFLECT)
@@ -285,20 +296,16 @@ def extend_borders(img: np.ndarray, pad: int) -> np.ndarray:
 def build_forest(dst: Path):
     img = np.array(Image.open(SOURCE / "forest_backdrop.png").convert("RGB"))
     plateau = plateau_mask(img)
-    cx, cy, hw = fit_grid(plateau)
-    hw *= 0.94  # un peu d'herbe autour de la grille
-    cleaned = remove_painted_rocks(img, plateau, (cx, cy, hw))
+    corners, h = perspective_grid(FOREST_PLATEAU, 0.55, 0.55, max_bottom=img.shape[0] - 26)
+    cleaned = remove_painted_rocks(img, plateau, grid_mask(corners, img.shape, 1.06))
     pad = 220
     extended = extend_borders(cleaned, pad)
     out = dst / "backdrops"
     out.mkdir(parents=True, exist_ok=True)
     Image.fromarray(extended).save(out / "forest.jpg", quality=90, optimize=True)
-    scale = hw / GRID_HALF_W  # pixels d'image par unité monde
-    (out / "forest.properties").write_text(
-        "# Placement de la grille sur forest.jpg (généré par tools/import_sources.py)\n"
-        "# centerX/centerY : pixel de l'image sous le centre de la grille ; scale : pixels par unité monde\n"
-        f"centerX = {cx + pad:.1f}\ncenterY = {cy + pad:.1f}\nscale = {scale:.4f}\n", encoding="utf-8")
-    print(f"forêt : grille centrée en ({cx}, {cy}), demi-largeur {hw:.0f} px, échelle {scale:.3f}")
+    text, scale = grid_properties(corners, h, pad, "forest.jpg")
+    (out / "forest.properties").write_text(text, encoding="utf-8")
+    print(f"forêt : grille en perspective, coins {np.round(corners).astype(int).tolist()}, échelle {scale:.3f}")
 
 
 # ---------------------------------------------------------------------------- désert
@@ -308,7 +315,7 @@ DESERT_PROPS_Y = 496             # début de la rangée d'éléments
 DESERT_EDGE_SLOPE = 0.525        # pente des deux bords avant du plateau (symétriques)
 DESERT_EDGE_POINT = (250, 335)   # un point du bord avant gauche
 DESERT_TIP_X = 650.0             # abscisse de la pointe avant (rencontre des deux bords)
-DESERT_PLATEAU = [(628, 36), (122, 268), (650, 545), (1163, 282)]  # coins : arrière, gauche, avant, droite
+DESERT_PLATEAU_GRID = [(628, 36), (1163, 282), (650, 545), (122, 268)]  # coins : fond, droite, avant, gauche
 SKY_SCALE = 2                    # agrandissement des images du ciel
 
 # éléments de la planche (cadre x0, y0, x1, y1 sous DESERT_PROPS_Y) -> nom du sprite
@@ -418,16 +425,6 @@ def desert_pad(rgb: np.ndarray, alpha: np.ndarray, pad: int):
     return big.clip(0, 255).astype(np.uint8), a
 
 
-def desert_fit_grid():
-    """Plus grand losange aux proportions de la grille dans le plateau (avec une marge de sable)."""
-    h, w = 700, 1300
-    poly = Image.new("L", (w, h), 0)
-    ImageDraw.Draw(poly).polygon(DESERT_PLATEAU, fill=1)
-    mask = np.array(poly).astype(bool)
-    mask = ndimage.binary_erosion(mask, iterations=14)
-    return fit_grid(mask)
-
-
 def build_desert(dst: Path):
     sheet = np.array(Image.open(SOURCE / "desert_sheet.png").convert("RGB"))
     top = sheet[:DESERT_CUT]
@@ -445,13 +442,12 @@ def build_desert(dst: Path):
 
     pad = 220
     big, a_big = desert_pad(rgb, alpha, pad)
-    cx, cy, hw = desert_fit_grid()
-    hw *= 0.97
+    corners, h = perspective_grid(DESERT_PLATEAU_GRID, 0.5, 0.6)
     out = dst / "backdrops"
     out.mkdir(parents=True, exist_ok=True)
     Image.fromarray(big).save(out / "desert.jpg", quality=90, optimize=True)
     Image.fromarray((a_big * 255).clip(0, 255).astype(np.uint8)).save(out / "desert.alpha.png", optimize=True)
-    scale = hw / GRID_HALF_W
+    text, scale = grid_properties(corners, h, pad, "desert.jpg")
 
     # ciel animé : images agrandies et adoucies, empilées verticalement dans un seul JPEG
     gif = Image.open(SOURCE / "desert_sky.gif")
@@ -462,14 +458,12 @@ def build_desert(dst: Path):
         frames.append(np.array(f.filter(ImageFilter.GaussianBlur(1.2))))
     Image.fromarray(np.concatenate(frames, 0)).save(out / "desert_sky.jpg", quality=88, optimize=True)
     (out / "desert.properties").write_text(
-        "# Placement de la grille sur desert.jpg (généré par tools/import_sources.py)\n"
-        "# centerX/centerY : pixel de l'image sous le centre de la grille ; scale : pixels par unité monde\n"
-        f"centerX = {cx + pad:.1f}\ncenterY = {cy + pad:.1f}\nscale = {scale:.4f}\n"
+        text +
         "# ciel animé derrière l'illustration : images empilées dans desert_sky.jpg\n"
         f"sky = desert_sky\nskyFrames = {len(frames)}\n"
         f"# ligne de l'illustration où se pose le bas du ciel (horizon derrière les montagnes)\nskyBottom = {pad + 230}\n",
         encoding="utf-8")
-    print(f"désert : grille centrée en ({cx}, {cy}), demi-largeur {hw:.0f} px, échelle {scale:.3f}")
+    print(f"désert : grille en perspective, coins {np.round(corners).astype(int).tolist()}, échelle {scale:.3f}")
 
     # éléments
     props = sheet[DESERT_PROPS_Y:]
