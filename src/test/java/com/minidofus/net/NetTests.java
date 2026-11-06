@@ -197,7 +197,7 @@ public final class NetTests {
         await(two, () -> a.lobby != null && a.lobby.players.size() == 2, 5000);
         Bot chef = a.lobby.chefId == a.net.playerId() ? a : b;
         Bot other = chef == a ? b : a;
-        chef.send(Protocol.SETTINGS, "DUNGEON", 1, "EASY", 1);
+        chef.send(Protocol.SETTINGS, "ARENA", 1, "EASY", 1);
         chef.send(Protocol.CLAIM, 0);
         other.send(Protocol.CLAIM, 3);
         await(two, () -> a.lobby.slotOwner[0] >= 0 && a.lobby.slotOwner[3] >= 0, 5000);

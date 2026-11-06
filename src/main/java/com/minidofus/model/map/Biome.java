@@ -5,8 +5,8 @@ public enum Biome {
     MEADOW(true),
     SNOW(true),
     DESERT(true),
-    /** Souterrain : pas de ciel, le décor peut donc entourer toute l'arène. */
-    DUNGEON(false);
+    /** Crépuscule : cendres et braises dans l'air. */
+    DUSK(true);
 
     private final boolean hasSky;
 

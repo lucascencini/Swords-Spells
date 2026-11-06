@@ -103,7 +103,6 @@ public final class BattleScene {
         this.arena = arena;
         for (FighterView v : fighterViews) views.put(v.fighter(), v);
         this.particles = new AmbientParticles(arena.theme().biome());
-        if (arena.theme().biome() == Biome.DUNGEON) shadowAlpha = 0;   // éclairage de torches : pas de soleil
         loadBackdrop();
         for (FighterView v : views.values()) v.setProjection(projection);
         buildSprites();
@@ -114,9 +113,41 @@ public final class BattleScene {
     public Iterable<FighterView> views() { return views.values(); }
     public EffectLayer effects() { return effects; }
     public Projection projection() { return projection; }
+    /** Carte jouée. */
+    public com.minidofus.model.map.MapTheme theme() { return arena.theme(); }
     public Rectangle2D arenaBounds() { return groundBounds; }
-    /** Sol précalculé de l'arène (aperçu de carte). */
+    /** Sol précalculé de l'arène. */
     public BufferedImage groundImage() { return ground; }
+
+    /**
+     * Aperçu de la carte (écran de préparation) : illustration, grille, ombres et obstacles, cadré sur l'arène
+     * aux proportions {@code aspect} (largeur / hauteur).
+     */
+    public BufferedImage previewImage(int width, double aspect) {
+        int height = (int) Math.round(width / aspect);
+        Rectangle2D grid = projection.outline(arena.board().size()).getBounds2D();
+        double viewW = Math.max(grid.getWidth() * 1.18, grid.getHeight() * 1.25 * aspect);
+        double s = width / viewW;
+        BufferedImage out = Assets.createImage(width, height);
+        Graphics2D g = out.createGraphics();
+        UiTheme.enableQuality(g);
+        g.setColor(backdropFill != null ? backdropFill : new Color(30, 40, 25));
+        g.fillRect(0, 0, width, height);
+        g.translate(width / 2.0, height / 2.0);
+        g.scale(s, s);
+        g.translate(-grid.getCenterX(), -grid.getCenterY());
+        if (sky != null) sky.draw(g, backdropBounds.getCenterX(), skyBottomY, backdropBounds.getWidth());
+        if (backdrop != null) {
+            g.drawImage(backdrop, (int) Math.round(backdropBounds.getX()), (int) Math.round(backdropBounds.getY()),
+                    (int) Math.round(backdropBounds.getWidth()), (int) Math.round(backdropBounds.getHeight()), null);
+        }
+        g.drawImage(ground, (int) Math.round(groundBounds.getX()), (int) Math.round(groundBounds.getY()), null);
+        for (DecorSprite d : sprites) {
+            g.drawImage(d.image, (int) Math.round(d.x), (int) Math.round(d.y), (int) Math.round(d.w), (int) Math.round(d.h), null);
+        }
+        g.dispose();
+        return out;
+    }
 
     // ------------------------------------------------------------------ construction des caches
 
@@ -217,7 +248,7 @@ public final class BattleScene {
         }
 
         g.setStroke(new BasicStroke(1f));
-        boolean darkGround = arena.theme().biome() == Biome.DUNGEON;
+        boolean darkGround = false;
         boolean sand = arena.theme().biome() == Biome.DESERT;
         g.setColor(darkGround ? new Color(255, 230, 200, 26)
                 : backdrop != null ? (sand ? new Color(110, 55, 15, 62) : new Color(25, 45, 10, 70))
@@ -257,7 +288,7 @@ public final class BattleScene {
         switch (arena.theme().biome()) {
             case SNOW -> { prefix = "snow"; stone = "snow_stone"; water = "ice"; }
             case DESERT -> { prefix = "sand"; stone = "sand_stone"; water = "water"; }
-            case DUNGEON -> { prefix = "dungeon"; stone = "dungeon_stone"; water = "dungeon_water"; }
+            case DUSK -> { prefix = "dungeon"; stone = "dungeon_stone"; water = "dungeon_water"; }
             default -> { prefix = "grass"; stone = "stone"; water = "water"; }
         }
         return switch (terrain) {

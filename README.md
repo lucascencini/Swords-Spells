@@ -35,7 +35,7 @@ Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur », «
 |---|---|
 | `--red warrior,archer` · `--blue mage,mage,warrior` | composition des équipes (1 à 3 parmi `warrior`, `mage`, `archer`, `druid`) |
 | `--ai easy\|normal\|hard` · `--ai-red …` | l'ordinateur joue l'équipe bleue (ou rouge) |
-| `--map forest\|ruins\|lake\|snow\|desert\|dungeon` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
+| `--map forest\|ruins\|mountain\|desert\|arena` · `--seed 1234` | carte, et graine pour rejouer exactement la même |
 
 Exemple : `java -jar build/mini-dofus.jar --red warrior,archer --blue mage,warrior --ai hard`.
 
@@ -105,12 +105,11 @@ anticipe aussi la riposte adverse.
 
 | Carte | Biome | Particularité |
 |---|---|---|
-| Clairière forestière | prairie | illustration de plateau en forêt (sol et décor), rochers et rondins |
-| Ruines anciennes | prairie | chemin pavé, caisses |
-| Bord de lac | prairie | étang infranchissable |
-| Col enneigé | neige | lac gelé (praticable), sapins enneigés, flocons |
-| Désert brûlant | désert | illustration d'un plateau rocheux sous un ciel animé, rochers et cactus (destructibles), poussière |
-| Crypte oubliée | souterrain | piliers, torches et braises |
+| Clairière forestière | prairie | plateau en forêt, rochers et rondins, feuillage au premier plan |
+| Ruines oubliées | crépuscule | dallage muré au soleil couchant, gravats, tombes, colonnes, cendres et braises |
+| Sommet enneigé | neige | plateau de roche au-dessus des cascades gelées, cristaux, congères, sapins, flocons |
+| Désert brûlant | désert | plateau rocheux sous un ciel animé, rochers et cactus (destructibles), poussière |
+| Arène impériale | désert | sable du Colisée devant la foule (murmure, clameurs), colonnes, statues, amphores et bannières |
 
 Chaque carte a son ambiance sonore en boucle (coupée avec `M`).
 
@@ -217,6 +216,11 @@ soins, éliminations, sorts lancés) et désigne le meilleur combattant.
   fichier `.properties`). Pour une nouvelle carte illustrée : ajouter l'image, relever les 4 coins du
   plateau peint (fond, droite, avant, gauche), l'importer de la même façon et indiquer son nom dans
   `MapTheme`.
+- **Ruines, Montagne, Arène** : `tools/import_maps.py` importe leurs planches (fond, coins du plateau, éléments
+  détourés du damier, ombres, premier plan) ; foule de l'Arène synthétisée par `tools/arena_sounds.py`.
+- **Interface** : `tools/import_ui.py` importe les portraits haute définition (visage recadré pour les fiches,
+  illustration entière dans l'info-bulle de l'écran de préparation) et les boutons de pierre (étirés sans
+  déformer leurs extrémités).
 - **Druide** : poses tirées de `tools/source/druid_sheet.jpg`, effets de ses sorts des planches `fx_*`
   (corbeau, abeilles, tornade, éclair, potion), bruitages synthétisés par `tools/druid_sounds.py`.
 - **Personnages** : Guerrier et Mage viennent de `tools/source/warrior_mage_sheet.png`, l'Archère de

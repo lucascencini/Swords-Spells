@@ -255,12 +255,10 @@ public final class LobbyScreen implements Screen {
         String label = mine ? "Libérer" : owner < 0 ? "Prendre" : null;
         if (label != null) {
             boolean hover = b.contains(mouseX, mouseY);
-            g.setColor(mine ? new Color(0x4A3020) : new Color(0x2D6B3A));
-            if (hover) g.setColor(g.getColor().brighter());
-            g.fill(new RoundRectangle2D.Double(b.x, b.y, b.width, b.height, 10, 10));
-            g.setColor(UiTheme.BRONZE);
-            g.draw(new RoundRectangle2D.Double(b.x, b.y, b.width, b.height, 10, 10));
-            UiTheme.drawCentered(g, label, UiTheme.BODY_BOLD.deriveFont(12.5f), b.getCenterX(), b.y + 20, UiTheme.PARCHMENT);
+            MenuButton.drawStretched(g, MenuButton.uiImage(mine ? "stone_button_2" : "stone_button_1"),
+                    b.x - 4, b.y - 3 - (hover ? 1 : 0), b.width + 8, b.height + 6);
+            UiTheme.drawOutlinedCentered(g, label, UiTheme.TITLE.deriveFont(13f), b.getCenterX(), b.y + 20 - (hover ? 1 : 0),
+                    hover ? UiTheme.GOLD_LIGHT : new Color(0xF0DDB4), new Color(20, 14, 8, 220));
         }
     }
 
@@ -302,9 +300,7 @@ public final class LobbyScreen implements Screen {
     }
 
     private void arrow(Graphics2D g, Rectangle r, String glyph) {
-        g.setColor(r.contains(mouseX, mouseY) ? new Color(0x5A4A2A) : new Color(0x3A3020));
-        g.fillRoundRect(r.x + 3, r.y + 3, r.width - 6, r.height - 6, 8, 8);
-        UiTheme.drawCentered(g, glyph, UiTheme.TITLE.deriveFont(20f), r.getCenterX(), r.y + 25, UiTheme.GOLD_LIGHT);
+        MenuButton.drawArrow(g, r, glyph.contains("‹") || glyph.contains("<") || glyph.contains("◀"), r.contains(mouseX, mouseY));
     }
 
     private static void fitted(Graphics2D g, String text, double cx, double baseline, int maxW, Color color) {

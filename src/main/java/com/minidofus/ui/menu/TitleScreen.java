@@ -66,11 +66,27 @@ public final class TitleScreen implements Screen {
         g.setColor(UiTheme.withAlpha(UiTheme.GOLD, 160));
         g.fillRect(width / 2 - 120, titleY + 60, 240, 2);
 
+        drawIvy(g);
         for (MenuButton b : buttons) b.draw(g, mouseX, mouseY);
         UiTheme.drawOutlinedCentered(g, com.minidofus.model.catalog.FighterCatalog.ALL.stream().map(c -> c.displayName())
                         .collect(java.util.stream.Collectors.joining(" · ")) + "  —  équipes de 1 à 3  —  "
                         + com.minidofus.model.map.MapTheme.values().length + " cartes",
                 UiTheme.BODY.deriveFont(12.5f), width / 2.0, height - 24, new Color(255, 255, 255, 190), new Color(0, 0, 0, 160));
+    }
+
+    /** Lierre qui tombe des deux coins hauts (le gauche en miroir), avec un léger balancement. */
+    private void drawIvy(Graphics2D g) {
+        java.awt.image.BufferedImage ivy = MenuButton.uiImage("ivy_corner");
+        double h = height * 0.46;
+        double w = h * ivy.getWidth() / ivy.getHeight();
+        java.awt.geom.AffineTransform saved = g.getTransform();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.rotate(Math.sin(clock * 0.7) * 0.012, width, 0);
+        g.drawImage(ivy, (int) Math.round(width - w), 0, (int) Math.round(w), (int) Math.round(h), null);
+        g.setTransform(saved);
+        g.rotate(-Math.sin(clock * 0.7 + 1.3) * 0.012, 0, 0);
+        g.drawImage(ivy, (int) Math.round(w), 0, (int) Math.round(-w), (int) Math.round(h), null);
+        g.setTransform(saved);
     }
 
     @Override

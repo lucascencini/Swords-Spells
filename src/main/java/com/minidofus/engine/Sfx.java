@@ -28,7 +28,8 @@ public enum Sfx {
     BEES("druid_bees", 0.4),
     WIND("druid_wind", 0.5),
     THUNDER("druid_thunder", 0.6),
-    CHIME("druid_chime", 0.4);
+    CHIME("druid_chime", 0.4),
+    CHEER("arena_cheer", 0.5);
 
     private final String file;
     private final double volume;
