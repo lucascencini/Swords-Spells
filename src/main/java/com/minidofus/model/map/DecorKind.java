@@ -19,6 +19,15 @@ public enum DecorKind {
     CRATE_2("crate_2", Role.OBSTACLE, 1.0, 0, 0, 24),
     FALLEN_LOG("fallen_log", Role.OBSTACLE, 0.72, 0, 0, 18),
     CACTUS_OBSTACLE("cactus_2", Role.OBSTACLE, 0.78, 0, 0, 12),
+    // désert illustré : éléments détourés de la planche (haute résolution, d'où les petites échelles)
+    DESERT_BOULDER_1("desert_rock_1", Role.OBSTACLE, 0.46, 0, 0),
+    DESERT_BOULDER_2("desert_rock_2", Role.OBSTACLE, 0.56, 0, 0),
+    DESERT_BOULDER_3("desert_rock_3", Role.OBSTACLE, 0.5, 0, 0),
+    DESERT_BOULDER_4("desert_rock_4", Role.OBSTACLE, 0.56, 0, 0),
+    SAGUARO_1("desert_saguaro_1", Role.OBSTACLE, 0.66, 0, 0, 12),
+    SAGUARO_2("desert_saguaro_2", Role.OBSTACLE, 0.56, 0, 0, 12),
+    BARREL_CACTUS_1("desert_barrel_1", Role.OBSTACLE, 0.72, 0, 0, 12),
+    BARREL_CACTUS_2("desert_barrel_2", Role.OBSTACLE, 0.78, 0, 0, 12),
 
     // pourtour de l'arène
     TREE_OAK_1("tree_oak_1", Role.TREE, 0.82, 7.0, 2.2),
@@ -48,7 +57,21 @@ public enum DecorKind {
     FLOWERS_YELLOW("flowers_yellow", Role.FLOWER, 0.55, 0, 0),
     FLOWERS_BLUE("flowers_blue", Role.FLOWER, 0.6, 0, 0),
     DEBRIS_1("debris_1", Role.FLOWER, 0.7, 0, 0),
-    DEBRIS_2("debris_2", Role.FLOWER, 0.9, 0, 0);
+    DEBRIS_2("debris_2", Role.FLOWER, 0.9, 0, 0),
+    DESERT_FLOWERS_1("desert_flowers_1", Role.FLOWER, 0.46, 0, 0),
+    DESERT_FLOWERS_2("desert_flowers_2", Role.FLOWER, 0.42, 0, 0),
+    DESERT_FLOWERS_3("desert_flowers_3", Role.FLOWER, 0.46, 0, 0),
+    DESERT_FLOWERS_4("desert_flowers_4", Role.FLOWER, 0.46, 0, 0),
+    DESERT_FLOWERS_5("desert_flowers_5", Role.FLOWER, 0.4, 0, 0),
+    DESERT_FLOWERS_6("desert_flowers_6", Role.FLOWER, 0.44, 0, 0),
+    DESERT_GRASS_1("desert_grass_1", Role.FLOWER, 0.46, 0, 0),
+    DESERT_GRASS_2("desert_grass_2", Role.FLOWER, 0.46, 0, 0),
+    DESERT_GRASS_3("desert_grass_3", Role.FLOWER, 0.46, 0, 0),
+    DESERT_AGAVE_1("desert_agave_1", Role.FLOWER, 0.4, 0, 0),
+    DESERT_AGAVE_2("desert_agave_2", Role.FLOWER, 0.38, 0, 0),
+    DESERT_PEBBLES_1("desert_pebbles_1", Role.FLOWER, 0.44, 0, 0),
+    DESERT_PEBBLES_2("desert_pebbles_2", Role.FLOWER, 0.44, 0, 0),
+    DESERT_PEBBLES_3("desert_pebbles_3", Role.FLOWER, 0.44, 0, 0);
 
     public enum Role { OBSTACLE, TREE, FLOWER }
 

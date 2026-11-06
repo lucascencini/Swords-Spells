@@ -55,6 +55,8 @@ public final class BattleScene {
     private BufferedImage backdrop;
     private Rectangle2D backdropBounds;
     private Color backdropFill;
+    private SkyLayer sky;
+    private double skyBottomY;
     private Rectangle2D groundBounds;
     private double waterClock;
 
@@ -117,6 +119,12 @@ public final class BattleScene {
         backdropBounds = new Rectangle2D.Double(-cx / scale, gridCenterY - cy / scale,
                 backdrop.getWidth() / scale, backdrop.getHeight() / scale);
         backdropFill = averageEdgeColor(backdrop);
+        String skyName = p.getProperty("sky");
+        if (skyName != null) {
+            sky = new SkyLayer(assets, skyName.trim(), Integer.parseInt(p.getProperty("skyFrames", "1").trim()));
+            skyBottomY = backdropBounds.getY() + Double.parseDouble(p.getProperty("skyBottom", "0")) / scale;
+            backdropFill = sky.topColor();
+        }
     }
 
     private static Color averageEdgeColor(BufferedImage img) {
@@ -164,7 +172,10 @@ public final class BattleScene {
 
         g.setStroke(new BasicStroke(1f));
         boolean darkGround = arena.theme().biome() == Biome.DUNGEON;
-        g.setColor(darkGround ? new Color(255, 230, 200, 26) : backdrop != null ? new Color(25, 45, 10, 70) : new Color(20, 40, 10, 38));
+        boolean sand = arena.theme().biome() == Biome.DESERT;
+        g.setColor(darkGround ? new Color(255, 230, 200, 26)
+                : backdrop != null ? (sand ? new Color(110, 55, 15, 62) : new Color(25, 45, 10, 70))
+                : new Color(20, 40, 10, 38));
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
                 if (board.terrain(x, y) != Terrain.WATER) g.draw(diamond(x, y, 0));
@@ -266,6 +277,7 @@ public final class BattleScene {
     public void update(double dt) {
         for (DecorSprite s : sprites) s.shake = Math.max(0, s.shake - dt * 4);
         waterClock += dt;
+        if (sky != null) sky.update(dt);
         particles.update(dt);
         for (FighterView v : views.values()) v.update(dt);
         effects.update(dt);
@@ -281,6 +293,7 @@ public final class BattleScene {
 
         AffineTransform screen = g.getTransform();
         g.transform(camera.transform());
+        if (sky != null) sky.draw(g, backdropBounds.getCenterX(), skyBottomY, backdropBounds.getWidth());
         if (backdrop != null) {
             g.drawImage(backdrop, (int) Math.round(backdropBounds.getX()), (int) Math.round(backdropBounds.getY()),
                     (int) Math.round(backdropBounds.getWidth()), (int) Math.round(backdropBounds.getHeight()), null);

@@ -51,7 +51,6 @@ public final class MapGenerator {
             switch (theme.feature()) {
                 case LAKE -> paintLake(board, rng, spawnA, spawnB, Terrain.WATER, 14, 9);
                 case FROZEN_LAKE -> paintLake(board, rng, spawnA, spawnB, Terrain.ICE, 16, 10);
-                case OASIS -> paintLake(board, rng, spawnA, spawnB, Terrain.WATER, 7, 5);
                 default -> { }
             }
         }

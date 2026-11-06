@@ -81,7 +81,7 @@ public final class Assets {
         }
         try (InputStream in = Assets.class.getResourceAsStream(resource)) {
             if (in != null) {
-                BufferedImage raw = ImageIO.read(in);
+                BufferedImage raw = withAlphaMask(ImageIO.read(in), path);
                 BufferedImage img = createImage(raw.getWidth(), raw.getHeight());
                 Graphics2D g = img.createGraphics();
                 g.drawImage(raw, 0, 0, null);
@@ -98,6 +98,26 @@ public final class Assets {
         g.fillRect(0, 0, 32, 32);
         g.dispose();
         return placeholder;
+    }
+
+    /**
+     * Une illustration JPEG peut avoir sa transparence dans un masque à part ({@code <path>.alpha.png}, en
+     * niveaux de gris) : bien plus léger qu'un PNG en couleurs avec transparence.
+     */
+    private static BufferedImage withAlphaMask(BufferedImage raw, String path) throws IOException {
+        if (raw == null) return null;
+        try (InputStream in = Assets.class.getResourceAsStream("/" + path + ".alpha.png")) {
+            if (in == null) return raw;
+            BufferedImage mask = ImageIO.read(in);
+            int w = raw.getWidth();
+            int h = raw.getHeight();
+            BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            int[] rgb = raw.getRGB(0, 0, w, h, null, 0, w);
+            int[] alpha = mask.getRGB(0, 0, w, h, null, 0, w);
+            for (int i = 0; i < rgb.length; i++) rgb[i] = (alpha[i] & 0xFF) << 24 | (rgb[i] & 0xFFFFFF);
+            out.setRGB(0, 0, w, h, rgb, 0, w);
+            return out;
+        }
     }
 
     /** Image translucide au format natif de l'écran (ou ARGB prémultiplié sans écran). */

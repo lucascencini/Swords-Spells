@@ -23,17 +23,20 @@ public enum MapTheme {
             List.of(SNOW_ROCK_1, SNOW_ROCK_2, CRATE_1),
             List.of(SNOW_PINE_1, SNOW_PINE_2, SNOW_PINE_3, SNOW_BUSH),
             List.of()),
-    DESERT("Désert brûlant", Biome.DESERT, 11, 0, 22, Feature.OASIS,
-            List.of(DESERT_ROCK_1, DESERT_ROCK_2, CACTUS_OBSTACLE, CRATE_2),
+    DESERT("Désert brûlant", Biome.DESERT, 11, 16, 0, Feature.NONE,
+            List.of(DESERT_BOULDER_1, DESERT_BOULDER_2, DESERT_BOULDER_3, DESERT_BOULDER_4,
+                    SAGUARO_1, SAGUARO_2, BARREL_CACTUS_1, BARREL_CACTUS_2),
             List.of(CACTUS_1, CACTUS_2, CACTUS_3, DRY_BUSH),
-            List.of()),
+            List.of(DESERT_FLOWERS_1, DESERT_FLOWERS_2, DESERT_FLOWERS_3, DESERT_FLOWERS_4, DESERT_FLOWERS_5,
+                    DESERT_FLOWERS_6, DESERT_GRASS_1, DESERT_GRASS_2, DESERT_GRASS_3, DESERT_AGAVE_1,
+                    DESERT_AGAVE_2, DESERT_PEBBLES_1, DESERT_PEBBLES_2, DESERT_PEBBLES_3), "desert"),
     DUNGEON("Crypte oubliée", Biome.DUNGEON, 14, 10, 22, Feature.NONE,
             List.of(PILLAR, MONUMENT, CRATE_1, CRATE_2),
             List.of(TORCH, TORCH, PILLAR_DECOR, MONUMENT_DECOR),
             List.of(DEBRIS_1, DEBRIS_2));
 
     /** Particularité du sol propre à l'ambiance. */
-    public enum Feature { NONE, STONE_PATH, LAKE, FROZEN_LAKE, OASIS }
+    public enum Feature { NONE, STONE_PATH, LAKE, FROZEN_LAKE }
 
     private final String displayName;
     private final Biome biome;
