@@ -5,11 +5,15 @@ générée aléatoirement, à deux joueurs sur le même PC ou contre l'ordinateu
 Application de bureau en **Java 17+ (Swing / Java2D)**, sans aucune dépendance externe : le JDK
 fournit le rendu, le son, et même la création d'un exécutable autonome.
 
-![Bord de lac](docs/screenshots/bord-de-lac.png)
+![Écran titre](docs/screenshots/titre.jpg)
 
-| Portée d'un sort | Boule de feu | Fin de combat |
+| Préparer le combat | Ligne de vue (3 contre 3) | Transition de tour |
 |---|---|---|
-| ![](docs/screenshots/portee-de-sort.png) | ![](docs/screenshots/boule-de-feu.png) | ![](docs/screenshots/victoire.png) |
+| ![](docs/screenshots/configuration.jpg) | ![](docs/screenshots/ligne-de-vue.jpg) | ![](docs/screenshots/transition.jpg) |
+| **Col enneigé** | **Désert brûlant** | **Crypte oubliée** |
+| ![](docs/screenshots/neige.jpg) | ![](docs/screenshots/desert.jpg) | ![](docs/screenshots/crypte.jpg) |
+
+![Fin de combat](docs/screenshots/fin-de-combat.jpg)
 
 ## Lancer le jeu
 
@@ -22,9 +26,10 @@ Pour compiler : un **JDK 17 ou plus récent** (par exemple [Temurin 21](https://
 |---|---|---|
 | Compiler, tester, créer le JAR | `build.bat` | `./build.sh` |
 | … puis jouer | `build.bat run` | `./build.sh run` |
-| Application autonome (Java embarqué, ~85 Mo) | `build.bat package` → `build\dist\MiniDofus\MiniDofus.exe` | `./build.sh package` |
+| Application autonome (Java embarqué, ~85 Mo) | `build.bat package` → `build\dist\SwordsAndSpells\SwordsAndSpells.exe` | `./build.sh package` |
 
-Le JAR seul se lance avec `java -jar build/mini-dofus.jar`. Options :
+Le jeu s'ouvre sur l'**écran titre** : choisissez « Contre l'ordinateur » ou « Deux joueurs », puis
+composez les équipes et la carte. Pour tester plus vite, des options lancent directement un combat :
 
 | Option | Effet |
 |---|---|
@@ -47,7 +52,8 @@ le `pom.xml` décrit le projet (structure Maven standard). Classe principale : `
 | Annuler le sort sélectionné | clic droit, ou clic hors des cases valides | `Échap` |
 | Fin du tour | bouton vert | `Espace` ou `Entrée` |
 | Caméra | molette : zoom · clic droit glissé : déplacement | `C` : recentrer |
-| Divers | icône haut-parleur | `M` : son · `F3` : images/s · `R` / `N` en fin de partie |
+| Pause (reprendre, recommencer, menu) | — | `Échap` sans sort sélectionné |
+| Divers | icône haut-parleur | `M` : son · `F3` : images/s · `R` / `N` / `Échap` en fin de partie |
 
 ## Règles
 
@@ -115,8 +121,9 @@ src/main/java/com/minidofus/
 ├── view/                     rendu : projection iso, caméra, scène, personnages
 │   ├── anim/                 petites animations composables (séquence, parallèle, interpolation)
 │   └── fx/                   effets : projectiles, explosions, entailles, chiffres flottants
-├── ui/                       HUD dessiné en Java2D : fiches, barre d'actions, info-bulles, fin de partie
-└── game/                     assemblage : session de jeu, contrôleur de tour, présentateur, fenêtre
+├── ui/                       HUD dessiné en Java2D : fiches, frise, barre d'actions, info-bulles, fin de partie
+│   └── menu/                 écran titre (avec partie de démonstration en fond), configuration, boutons
+└── game/                     assemblage : session de jeu, contrôleur de tour, présentateur, fenêtre (menus, combat, pause)
 ```
 
 Le principe central : **le modèle applique les règles instantanément et publie des événements ; la vue
@@ -194,6 +201,7 @@ Deux outils de vérification visuelle, dans `src/test/java` :
 - `game.Snapshots` joue une partie ordinateur contre ordinateur hors écran et enregistre une capture à
   la première apparition de chaque sort, avec le temps de rendu moyen.
 - `WindowSmokeTest` ouvre la vraie fenêtre et la pilote avec de vrais clics et touches.
+- `MenuSmokeTest` parcourt les menus dans la vraie fenêtre : titre, configuration, combat, pause, retour.
 
 ## Pistes
 

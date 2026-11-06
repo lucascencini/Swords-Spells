@@ -61,7 +61,7 @@ public final class Snapshots {
 
     private void play(MapTheme theme, long seed, List<FighterClass> red, List<FighterClass> blue) throws Exception {
         // 1) deux joueurs humains : aperçus de déplacement et de portée
-        view = new GameView(new MatchSetup(theme, seed, red, blue, null, null));
+        view = new GameView(new MatchSetup(theme, seed, red, blue, null, null), () -> { });
         view.layoutOffscreen(W, H);
         run(0.7);
         shot("intro");
@@ -84,7 +84,7 @@ public final class Snapshots {
         }
 
         // 2) ordinateur contre ordinateur, jusqu'à la fin
-        view = new GameView(new MatchSetup(theme, seed, red, blue, Difficulty.HARD, Difficulty.NORMAL));
+        view = new GameView(new MatchSetup(theme, seed, red, blue, Difficulty.HARD, Difficulty.NORMAL), () -> { });
         view.layoutOffscreen(W, H);
         Set<CastStyle> seen = EnumSet.noneOf(CastStyle.class);
         List<String> pending = new ArrayList<>();

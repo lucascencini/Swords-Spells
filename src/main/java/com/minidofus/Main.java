@@ -19,7 +19,8 @@ import java.util.Locale;
 import java.util.Random;
 
 /**
- * Point d'entrée. Options (toutes facultatives) :
+ * Point d'entrée. Sans option, le jeu s'ouvre sur l'écran titre. Avec des options, il lance directement
+ * le combat décrit (pratique pour tester) :
  * <pre>
  *   --map forest|ruins|lake|snow|desert|dungeon   carte (sinon aléatoire)
  *   --seed 1234                      graine de la carte (pour rejouer exactement la même)
@@ -41,6 +42,7 @@ public final class Main {
         List<FighterClass> blue = List.of(FighterCatalog.MAGE);
         Difficulty redAi = null;
         Difficulty blueAi = null;
+        boolean direct = args.length > 0;
         for (int i = 0; i + 1 < args.length; i += 2) {
             String value = args[i + 1];
             switch (args[i]) {
@@ -53,13 +55,13 @@ public final class Main {
                 default -> System.err.println("Option inconnue : " + args[i]);
             }
         }
-        MatchSetup setup = new MatchSetup(theme, seed, red, blue, redAi, blueAi);
+        MatchSetup setup = direct ? new MatchSetup(theme, seed, red, blue, redAi, blueAi) : null;
         SwingUtilities.invokeLater(() -> open(setup));
     }
 
     private static void open(MatchSetup setup) {
         JFrame frame = new JFrame("Swords & Spells — Combat tactique");
-        GameView view = new GameView(setup);
+        GameView view = new GameView(setup, () -> frame.dispatchEvent(new WindowEvent(frame, WindowEvent.WINDOW_CLOSING)));
         frame.setContentPane(view);
         frame.setIconImage(new Assets().image("ui/portrait_warrior"));
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
