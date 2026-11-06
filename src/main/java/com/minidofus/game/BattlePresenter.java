@@ -23,6 +23,7 @@ import com.minidofus.view.fx.FloatingText;
 import com.minidofus.view.fx.Projectile;
 import com.minidofus.view.fx.RingPulse;
 import com.minidofus.view.fx.Slash;
+import com.minidofus.view.fx.SoulWisp;
 import com.minidofus.view.fx.Tether;
 
 import java.awt.Color;
@@ -55,15 +56,20 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     private final Assets assets;
     private final Hud hud;
     private final String mapName;
+    private final Consumer<Point2D.Double> focus;
+    private final MatchSetup setup;
     private boolean introShown;
 
-    BattlePresenter(BattleScene scene, AnimationQueue queue, SoundPlayer sound, Assets assets, Hud hud, String mapName) {
+    BattlePresenter(BattleScene scene, AnimationQueue queue, SoundPlayer sound, Assets assets, Hud hud,
+                    MatchSetup setup, Consumer<Point2D.Double> focus) {
+        this.setup = setup;
+        this.mapName = setup.theme().displayName();
+        this.focus = focus;
         this.scene = scene;
         this.queue = queue;
         this.sound = sound;
         this.assets = assets;
         this.hud = hud;
-        this.mapName = mapName;
     }
 
     @Override
@@ -91,19 +97,25 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     // ------------------------------------------------------------------ tours et déplacements
 
     private Animation turnStarted(BattleEvent.TurnStarted e) {
-        return call(() -> {
+        return sequence(call(() -> {
             Fighter f = e.fighter();
             Point2D.Double p = view(f).worldFeet();
+            focus.accept(new Point2D.Double(p.x, p.y - 30));
             scene.effects().add(new RingPulse(p.x, p.y, UiTheme.teamColor(f.team()), 0.7));
+            boolean computer = setup.ai(f.team()) != null;
+            String subtitle;
+            if (setup.soloHumanTeam() != null) {
+                subtitle = computer ? "L'ordinateur réfléchit…" : "À vous de jouer !";
+            } else {
+                subtitle = computer ? "Équipe " + f.team().displayName() + " · ordinateur" : "Équipe " + f.team().displayName();
+            }
             if (!introShown) {
                 introShown = true;
-                hud.showBanner(mapName, f.name() + " (" + f.team().displayName() + ") ouvre le combat", UiTheme.GOLD_LIGHT, 2.2);
-            } else {
-                hud.showBanner(f.name() + " · équipe " + f.team().displayName(), "Manche " + e.round(),
-                        UiTheme.teamTextColor(f.team()), 1.1);
+                hud.showIntro(mapName, f.name() + " (" + f.team().displayName() + ") ouvre le combat");
             }
+            hud.showTurn(f, "Manche " + e.round() + "  ·  " + subtitle);
             Sfx.TURN.play(sound);
-        });
+        }), delay(0.25));
     }
 
     private Animation moved(BattleEvent.Moved e) {
@@ -179,6 +191,8 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             Cell from = caster.cell();
             if (!from.equals(target)) caster.face(from, target);
         });
+        Color aura = auraColor(e.spell().style());
+        if (aura != null) face = sequence(face, call(() -> caster.cast(aura)), delay(0.12));
         return switch (e.spell().style()) {
             case MELEE, STUN_STRIKE, PUSH_STRIKE -> sequence(face, call(() -> {
                 Sfx.MELEE.play(sound);
@@ -221,6 +235,19 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             }), delay(0.15));
             case TELEPORT, LEAP -> face;
             case COLLISION, TRAP_TRIGGER, POISON_TICK -> call(() -> { });
+        };
+    }
+
+    /** Couleur de l'aura d'incantation, ou {@code null} pour les attaques physiques (élan à la place). */
+    private static Color auraColor(CastStyle style) {
+        return switch (style) {
+            case ARCANE_BOLT, TELEPORT -> new Color(0x8FA8FF);
+            case FIREBALL -> new Color(0xFF8A3D);
+            case HEAL -> UiTheme.HEAL;
+            case POISON -> UiTheme.POISON;
+            case SHIELD -> UiTheme.SHIELD;
+            case ARROW_RAIN, TRAP -> UiTheme.GOLD_LIGHT;
+            default -> null;
         };
     }
 
@@ -280,10 +307,16 @@ final class BattlePresenter implements Consumer<BattleEvent> {
     }
 
     private Animation died(BattleEvent.Died e) {
-        return sequence(call(() -> {
-            Sfx.DEATH.play(sound);
-            for (StatusKind k : StatusKind.values()) view(e.fighter()).setStatus(k, false);
-        }), delay(0.4));
+        return defer(() -> {
+            FighterView v = view(e.fighter());
+            return sequence(call(() -> {
+                Sfx.DEATH.play(sound);
+                for (StatusKind k : StatusKind.values()) v.setStatus(k, false);
+                Point2D.Double p = v.worldFeet();
+                scene.effects().add(new SoulWisp(p.x, p.y, UiTheme.teamColor(e.fighter().team())));
+                scene.effects().add(new FloatingText("K.O.", p.x, p.y - 70, UiTheme.teamTextColor(e.fighter().team()), 20));
+            }), tween(0.9, v::setDeathProgress));
+        });
     }
 
     private Animation obstacleDamaged(BattleEvent.ObstacleDamaged e) {

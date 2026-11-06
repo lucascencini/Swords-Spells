@@ -21,11 +21,13 @@ import com.minidofus.view.Highlights;
 import com.minidofus.view.PoseTable;
 import com.minidofus.view.anim.AnimationQueue;
 
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
 
 /**
  * Une partie : la carte, le combat, sa représentation, le contrôleur du joueur humain et, le cas
@@ -48,8 +50,10 @@ public final class GameSession implements HudModel {
     private double aiTimer;
     private int aiActions;
     private Fighter aiTurnOwner;
+    private double battleSeconds;
 
-    public GameSession(MatchSetup setup, Assets assets, PoseTable poses, SoundPlayer sound, Hud hud) {
+    public GameSession(MatchSetup setup, Assets assets, PoseTable poses, SoundPlayer sound, Hud hud,
+                       Consumer<Point2D.Double> focus) {
         this.setup = setup;
         this.sound = sound;
         Arena arena = MapGenerator.generate(setup.theme(), setup.seed());
@@ -66,7 +70,7 @@ public final class GameSession implements HudModel {
         this.battle = new Battle(arena.board(), fighters, new Random());
         this.scene = new BattleScene(assets, poses, arena, views);
         this.controller = new TurnController(battle);
-        battle.addListener(new BattlePresenter(scene, animations, sound, assets, hud, setup.theme().displayName()));
+        battle.addListener(new BattlePresenter(scene, animations, sound, assets, hud, setup, focus));
         battle.start();
     }
 
@@ -80,6 +84,7 @@ public final class GameSession implements HudModel {
     }
 
     public void update(double dt) {
+        if (!battle.isOver()) battleSeconds += dt;
         animations.update(dt);
         scene.update(dt);
         controller.update(dt);
@@ -153,5 +158,6 @@ public final class GameSession implements HudModel {
     @Override public String mapName() { return setup.theme().displayName(); }
     @Override public long seed() { return setup.seed(); }
     @Override public boolean isMuted() { return sound.isMuted(); }
+    @Override public double battleSeconds() { return battleSeconds; }
     @Override public String hint() { return isAiTurn() ? "" : controller.hint(); }
 }

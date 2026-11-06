@@ -44,6 +44,9 @@ public interface HudModel {
 
     boolean isMuted();
 
+    /** Durée réelle du combat (secondes), pour le récapitulatif de fin. */
+    double battleSeconds();
+
     /** Phrase d'aide contextuelle sous la barre d'actions. */
     String hint();
 }

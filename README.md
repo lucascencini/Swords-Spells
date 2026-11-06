@@ -157,8 +157,14 @@ jeu, et ajouter une IA ou du réseau ne demande de toucher qu'au modèle.
 - Assets : 269 fichiers (~4 Mo, nombreux doublons) → 61 fichiers (1,8 Mo) nettoyés, voir ci-dessous.
 
 **Ergonomie** : aperçu du chemin et de son coût en PM, aperçu de la zone d'impact, info-bulles des
-sorts, raccourcis clavier, PA/PM en pastilles, barre de vie animée, rejouer la même carte ou en tirer
-une nouvelle sans recharger.
+sorts, raccourcis clavier, barre de vie animée, rejouer la même carte ou en tirer une nouvelle sans recharger.
+
+**Présentation** : le pack ne fournit que des poses fixes, toutes les animations sont donc
+procédurales (respiration au repos, balancement de marche, aura et étincelles d'incantation, recul
+quand on est touché, chute puis âme qui s'élève à la mort). À chaque tour, la caméra glisse vers le
+combattant actif s'il sort du cadre, une bannière à son portrait l'annonce et la frise d'initiative
+avance. L'écran de fin récapitule les statistiques de chaque combattant (dégâts infligés et subis,
+soins, éliminations, sorts lancés) et désigne le meilleur combattant.
 
 ## Personnaliser
 

@@ -20,6 +20,7 @@ import java.awt.LinearGradientPaint;
 import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -57,8 +58,14 @@ public final class Hud {
     private String bannerTitle;
     private String bannerSubtitle;
     private Color bannerColor = UiTheme.PARCHMENT;
+    private Color bannerAccent = UiTheme.GOLD;
+    private BufferedImage bannerPortrait;
     private double bannerTime;
     private double bannerDuration;
+    private boolean introRunning;
+    private Color pulseColor = UiTheme.GOLD;
+    private double pulse;
+    private double timelineCursor = -1;
     private double endScreenTime;
     private double fps;
 
@@ -128,10 +135,27 @@ public final class Hud {
         return null;
     }
 
-    public void showBanner(String title, String subtitle, Color color, double seconds) {
+    /** Grande bannière d'ouverture du combat (nom de la carte). */
+    public void showIntro(String title, String subtitle) {
+        setBanner(title, subtitle, UiTheme.GOLD_LIGHT, UiTheme.GOLD, null, 2.4);
+        introRunning = true;
+    }
+
+    /** Bannière de début de tour, avec le portrait et les couleurs de l'équipe du combattant. */
+    public void showTurn(Fighter f, String subtitle) {
+        pulseColor = UiTheme.teamColor(f.team());
+        pulse = 1;
+        if (introRunning) return; // la bannière d'ouverture annonce déjà qui commence
+        setBanner(f.name(), subtitle, UiTheme.teamTextColor(f.team()), UiTheme.teamColor(f.team()),
+                assets.image("ui/portrait_" + f.classId()), 1.3);
+    }
+
+    private void setBanner(String title, String subtitle, Color color, Color accent, BufferedImage portrait, double seconds) {
         bannerTitle = title;
         bannerSubtitle = subtitle;
         bannerColor = color;
+        bannerAccent = accent;
+        bannerPortrait = portrait;
         bannerDuration = seconds;
         bannerTime = 0;
     }
@@ -139,14 +163,24 @@ public final class Hud {
     public void update(double dt, HudModel m) {
         if (bannerTitle != null) {
             bannerTime += dt;
-            if (bannerTime >= bannerDuration) bannerTitle = null;
+            if (bannerTime >= bannerDuration) {
+                bannerTitle = null;
+                introRunning = false;
+            }
         }
+        pulse = Math.max(0, pulse - dt * 1.6);
+        int target = m.turnOrder().indexOf(m.active());
+        if (timelineCursor < 0) timelineCursor = target;
+        double diff = target - timelineCursor;
+        if (diff < -1.5) timelineCursor = target; // retour en début de manche : saut direct
+        else timelineCursor += diff * (1 - Math.exp(-10 * dt));
         endScreenTime = m.isOver() && !m.isBusy() ? endScreenTime + dt : 0;
     }
 
     // ------------------------------------------------------------------ rendu
 
     public void draw(Graphics2D g, HudModel m) {
+        drawTurnPulse(g);
         int redRow = 0;
         int blueRow = 0;
         for (FighterView v : m.fighterViews()) {
@@ -277,6 +311,21 @@ public final class Hud {
                 width / 2.0, 56, UiTheme.TEXT_DIM);
     }
 
+    /** Liseré coloré qui pulse sur les bords de l'écran à chaque changement de tour. */
+    private void drawTurnPulse(Graphics2D g) {
+        if (pulse <= 0) return;
+        int a = (int) (110 * pulse * pulse);
+        int band = 70;
+        Color c = UiTheme.withAlpha(pulseColor, a);
+        Color clear = UiTheme.withAlpha(pulseColor, 0);
+        g.setPaint(new GradientPaint(0, 0, c, band, 0, clear));
+        g.fillRect(0, 0, band, height);
+        g.setPaint(new GradientPaint(width, 0, c, width - band, 0, clear));
+        g.fillRect(width - band, 0, band, height);
+        g.setPaint(new GradientPaint(0, height, c, 0, height - band, clear));
+        g.fillRect(0, height - band, width, band);
+    }
+
     /** Frise de l'ordre de jeu : le combattant actif est mis en avant, les morts sont grisés. */
     private void drawTimeline(Graphics2D g, HudModel m) {
         List<Fighter> order = m.turnOrder();
@@ -313,6 +362,13 @@ public final class Hud {
                 g.setColor(new Color(255, 255, 255, 60));
                 g.drawString("›", x0 + (i + 1) * TIMELINE_SLOT - 3, y + 22);
             }
+        }
+        if (!m.isOver() && timelineCursor >= 0) {
+            double cx = x0 + timelineCursor * TIMELINE_SLOT + TIMELINE_SLOT / 2.0;
+            g.setColor(UiTheme.GOLD_LIGHT);
+            int[] xs = {(int) cx - 6, (int) cx + 6, (int) cx};
+            int[] ys = {y + 46, y + 46, y + 40};
+            g.fillPolygon(xs, ys, 3);
         }
     }
 
@@ -515,12 +571,19 @@ public final class Hud {
         g.setPaint(new LinearGradientPaint(0, 0, width, 0, new float[] {0f, 0.3f, 0.7f, 1f},
                 new Color[] {clear, dark, dark, clear}));
         g.fillRect(0, y, width, h);
-        Color gold = UiTheme.withAlpha(UiTheme.GOLD, 200);
-        Color goldClear = UiTheme.withAlpha(UiTheme.GOLD, 0);
+        Color gold = UiTheme.withAlpha(bannerAccent, 210);
+        Color goldClear = UiTheme.withAlpha(bannerAccent, 0);
         g.setPaint(new LinearGradientPaint(0, 0, width, 0, new float[] {0f, 0.35f, 0.65f, 1f},
                 new Color[] {goldClear, gold, gold, goldClear}));
         g.fillRect(0, y, width, 2);
         g.fillRect(0, y + h - 2, width, 2);
+        if (bannerPortrait != null) {
+            int ph = h - 14;
+            int pw = (int) Math.round(bannerPortrait.getWidth() * (ph / (double) bannerPortrait.getHeight()));
+            Font tf = UiTheme.TITLE.deriveFont(24f);
+            int titleW = g.getFontMetrics(tf).stringWidth(bannerTitle);
+            g.drawImage(bannerPortrait, (int) (cx - titleW / 2.0 - pw - 18 + slide), y + 7, pw, ph, null);
+        }
         UiTheme.drawOutlinedCentered(g, bannerTitle, UiTheme.TITLE.deriveFont(24f), cx + slide, y + 32,
                 bannerColor, new Color(0, 0, 0, 160));
         if (bannerSubtitle != null) {
@@ -533,25 +596,98 @@ public final class Hud {
         float a = (float) Math.min(1, endScreenTime / 0.6);
         Composite saved = g.getComposite();
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, a));
-        g.setColor(new Color(5, 10, 5, 150));
+        g.setColor(new Color(5, 10, 5, 165));
         g.fillRect(0, 0, width, height);
-        int w = 420;
-        int h = 170;
+
+        List<FighterView> views = m.fighterViews();
+        int rowH = 34;
+        int w = Math.min(width - 40, 660);
+        int h = 112 + 26 + views.size() * rowH + 74;
         int x = (width - w) / 2;
-        int y = height / 2 - 60;
+        int y = Math.max(20, (height - h) / 2);
         UiTheme.panel(g, x, y, w, h, 18, true);
+
         Team winner = m.winner();
         Team human = m.soloHumanTeam();
-        String title = human == null ? "Victoire !" : human == winner ? "Victoire !" : "Défaite…";
-        UiTheme.drawCentered(g, title, UiTheme.TITLE.deriveFont(30f), width / 2.0, y + 48,
-                human != null && human != winner ? UiTheme.DAMAGE : UiTheme.GOLD_LIGHT);
+        boolean defeat = human != null && human != winner;
+        UiTheme.drawCentered(g, defeat ? "Défaite…" : "Victoire !", UiTheme.TITLE.deriveFont(30f), width / 2.0, y + 46,
+                defeat ? UiTheme.DAMAGE : UiTheme.GOLD_LIGHT);
         UiTheme.drawCentered(g, "L'équipe " + winner.displayName() + " remporte le combat",
-                UiTheme.BODY_BOLD.deriveFont(15f), width / 2.0, y + 80, UiTheme.teamTextColor(winner));
-        UiTheme.drawCentered(g, "en " + m.round() + (m.round() > 1 ? " manches" : " manche"),
-                UiTheme.BODY.deriveFont(13f), width / 2.0, y + 104, UiTheme.TEXT_DIM);
+                UiTheme.BODY_BOLD.deriveFont(15f), width / 2.0, y + 76, UiTheme.teamTextColor(winner));
+        int seconds = (int) Math.round(m.battleSeconds());
+        UiTheme.drawCentered(g, m.round() + (m.round() > 1 ? " manches" : " manche") + "  ·  "
+                        + (seconds >= 60 ? seconds / 60 + " min " : "") + seconds % 60 + " s  ·  " + m.mapName(),
+                UiTheme.BODY.deriveFont(13f), width / 2.0, y + 98, UiTheme.TEXT_DIM);
+
+        // tableau des statistiques
+        String[] headers = {"Dégâts", "Subis", "Soins", "K.O.", "Sorts"};
+        int nameW = w - 60 - headers.length * 74;
+        int tx = x + 30;
+        int ty = y + 124;
+        g.setFont(UiTheme.BODY_BOLD.deriveFont(11.5f));
+        g.setColor(UiTheme.TEXT_DIM);
+        g.drawString("Combattant", tx + 40, ty);
+        for (int i = 0; i < headers.length; i++) {
+            UiTheme.drawCentered(g, headers[i], g.getFont(), tx + nameW + i * 74 + 37, ty, UiTheme.TEXT_DIM);
+        }
+        FighterView mvp = null;
+        double best = -1;
+        for (FighterView v : views) {
+            var st = v.fighter().stats();
+            double score = st.damageDealt() + st.healingDone() * 0.8 + st.kills() * 25;
+            if (score > best) {
+                best = score;
+                mvp = v;
+            }
+        }
+        for (int r = 0; r < views.size(); r++) {
+            FighterView v = views.get(r);
+            Fighter f = v.fighter();
+            var st = f.stats();
+            int ry = ty + 10 + r * rowH;
+            g.setColor(r % 2 == 0 ? new Color(255, 255, 255, 12) : new Color(0, 0, 0, 0));
+            g.fillRoundRect(tx - 8, ry, w - 44, rowH - 2, 8, 8);
+            g.setColor(UiTheme.teamColor(f.team()));
+            g.fillRoundRect(tx - 8, ry + 4, 4, rowH - 10, 3, 3);
+            BufferedImage portrait = assets.image("ui/portrait_" + f.classId());
+            Composite c = g.getComposite();
+            if (v.isShownDead()) g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.4f * a));
+            g.drawImage(portrait, tx, ry + 2, 28, 28, null);
+            g.setComposite(c);
+            g.setFont(UiTheme.BODY_BOLD.deriveFont(13f));
+            g.setColor(UiTheme.teamTextColor(f.team()));
+            String name = label(m, f) + (v.isShownDead() ? "  (K.O.)" : "");
+            g.drawString(name, tx + 40, ry + 21);
+            if (v == mvp && best > 0) {
+                int sx = tx + 46 + g.getFontMetrics().stringWidth(name);
+                drawStar(g, sx + 6, ry + 16, 7);
+            }
+            int[] values = {st.damageDealt(), st.damageTaken(), st.healingDone(), st.kills(), st.spellsCast()};
+            for (int i = 0; i < values.length; i++) {
+                UiTheme.drawCentered(g, String.valueOf(values[i]), UiTheme.BODY.deriveFont(13f),
+                        tx + nameW + i * 74 + 37, ry + 21, values[i] == 0 ? UiTheme.TEXT_DIM : UiTheme.PARCHMENT);
+            }
+        }
+        int by = y + h - 58;
+        replayButton = new Rectangle(width / 2 - 170, by, 160, 40);
+        newMapButton = new Rectangle(width / 2 + 10, by, 160, 40);
         drawPlainButton(g, replayButton, "Rejouer (R)", UiTheme.GOLD);
         drawPlainButton(g, newMapButton, "Nouvelle carte (N)", new Color(0x4A9C5A));
         g.setComposite(saved);
+    }
+
+    /** Étoile dorée du meilleur combattant (dégâts + soins + éliminations). */
+    private static void drawStar(Graphics2D g, double cx, double cy, double r) {
+        Path2D p = new Path2D.Double();
+        for (int i = 0; i < 10; i++) {
+            double ang = -Math.PI / 2 + i * Math.PI / 5;
+            double rr = i % 2 == 0 ? r : r * 0.45;
+            if (i == 0) p.moveTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr);
+            else p.lineTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr);
+        }
+        p.closePath();
+        g.setColor(UiTheme.GOLD_LIGHT);
+        g.fill(p);
     }
 
     private void drawPlainButton(Graphics2D g, Rectangle r, String label, Color accent) {
