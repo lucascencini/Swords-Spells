@@ -321,6 +321,16 @@ public final class GameView extends JComponent {
     }
 
     private void tick() {
+        // une exception ne doit jamais arrêter la boucle : un Timer Swing qui lève une exception ne se relance plus
+        try {
+            tickFrame();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            repaint();
+        }
+    }
+
+    private void tickFrame() {
         long now = System.nanoTime();
         double dt = Math.min(0.05, (now - lastFrame) / 1e9); // pas de saut énorme après une pause
         lastFrame = now;

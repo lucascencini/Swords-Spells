@@ -278,7 +278,8 @@ final class OnlineController implements GameSession.OnlineLink {
     void update() {
         if (client == null) return;
         Message m;
-        while ((m = client.poll()) != null) handle(m);
+        // un message peut fermer la connexion (refus, serveur injoignable) : client redevient null en cours de boucle
+        while (client != null && (m = client.poll()) != null) handle(m);
     }
 
     private void handle(Message m) {
