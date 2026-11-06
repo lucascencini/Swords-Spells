@@ -330,6 +330,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
             FighterView v = view(e.fighter());
             return sequence(call(() -> {
                 Sfx.DEATH.play(sound);
+                if (scene.theme() == com.minidofus.model.map.MapTheme.ARENA) Sfx.CHEER.play(sound, 0.35);  // la foule
                 for (StatusKind k : StatusKind.values()) v.setStatus(k, false);
                 Point2D.Double p = v.worldFeet();
                 scene.effects().add(new SoulWisp(p.x, p.y, UiTheme.teamColor(e.fighter().team())));
@@ -369,6 +370,7 @@ final class BattlePresenter implements Consumer<BattleEvent> {
         return sequence(delay(0.6), call(() -> {
             Sfx.VICTORY.play(sound);
             Sfx.VICTORY_COINS.play(sound, 0.25);
+            if (scene.theme() == com.minidofus.model.map.MapTheme.ARENA) Sfx.CHEER.play(sound, 0.1);
         }));
     }
 

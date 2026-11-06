@@ -278,7 +278,7 @@ public final class GameView extends JComponent {
 
     /** Aperçu du terrain d'une carte (sol précalculé de la scène), pour l'écran de configuration. */
     private BufferedImage mapPreview(MapTheme theme) {
-        return new BattleScene(assets, poses, MapGenerator.generate(theme, 3), List.of()).groundImage();
+        return new BattleScene(assets, poses, MapGenerator.generate(theme, 3), List.of()).previewImage(560, 2.2);
     }
 
     /** Ambiance sonore en boucle de chaque carte (fichiers générés par tools/ambience.py). */
@@ -286,10 +286,9 @@ public final class GameView extends JComponent {
         return switch (theme) {
             case FOREST -> "amb_forest";
             case RUINS -> "amb_ruins";
-            case LAKE -> "amb_lake";
-            case SNOW -> "amb_snow";
+            case MOUNTAIN -> "amb_snow";
             case DESERT -> "amb_desert";
-            case DUNGEON -> "amb_dungeon";
+            case ARENA -> "amb_arena";
         };
     }
 

@@ -763,11 +763,11 @@ public final class Hud {
 
     private void drawPlainButton(Graphics2D g, Rectangle r, String label, Color accent) {
         boolean hover = r.contains(mouseX, mouseY);
-        g.setPaint(new GradientPaint(0, r.y, hover ? accent : accent.darker(), 0, r.y + r.height, accent.darker().darker()));
-        g.fill(new RoundRectangle2D.Double(r.x, r.y, r.width, r.height, 12, 12));
-        g.setColor(hover ? Color.WHITE : accent.brighter());
-        g.draw(new RoundRectangle2D.Double(r.x, r.y, r.width, r.height, 12, 12));
-        UiTheme.drawCentered(g, label, UiTheme.BODY_BOLD.deriveFont(14f), r.x + r.width / 2.0, r.y + 26, Color.WHITE);
+        int lift = hover ? -2 : 0;
+        com.minidofus.ui.menu.MenuButton.drawStretched(g, assets.image("ui/stone_button_" + (1 + Math.floorMod(label.hashCode(), 3))),
+                r.x - 6, r.y - 4 + lift, r.width + 12, r.height + 8);
+        UiTheme.drawOutlinedCentered(g, label, UiTheme.TITLE.deriveFont(14.5f), r.x + r.width / 2.0, r.y + r.height / 2.0 + 5 + lift,
+                hover ? UiTheme.GOLD_LIGHT : new Color(0xF0DDB4), new Color(20, 14, 8, 220));
     }
 
     /** Texte centré, réduit si nécessaire pour tenir dans {@code maxW}. */

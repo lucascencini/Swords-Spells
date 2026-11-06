@@ -227,19 +227,25 @@ public final class SetupScreen implements Screen {
         FontMetrics fm = g.getFontMetrics(UiTheme.BODY.deriveFont(12f));
         int w = 0;
         for (String l : lines) w = Math.max(w, fm.stringWidth(l));
-        w += 28;
-        int h = 36 + lines.size() * 17;
+        // illustration haute définition à gauche, texte à droite
+        int art = 132;
+        w += 28 + art + 12;
+        int h = Math.max(36 + lines.size() * 17, art + 20);
         int x = Math.max(8, Math.min(width - w - 8, anchor.x + anchor.width / 2 - w / 2));
         int y = anchor.y + anchor.height + 8;
         if (y + h > height - 8) y = anchor.y - h - 8;
         UiTheme.panel(g, x, y, w, h, 10, false);
+        java.awt.image.BufferedImage img = assets.image("ui/art_" + c.id());
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(img, x + 10, y + (h - art) / 2, art, art, null);
+        int tx = x + 22 + art;
         g.setFont(UiTheme.TITLE.deriveFont(14f));
         g.setColor(UiTheme.GOLD_LIGHT);
-        g.drawString(c.displayName(), x + 14, y + 22);
+        g.drawString(c.displayName(), tx, y + 22);
         g.setFont(UiTheme.BODY.deriveFont(12f));
         for (int i = 0; i < lines.size(); i++) {
             g.setColor(i == 0 ? UiTheme.TEXT_DIM : UiTheme.PARCHMENT);
-            g.drawString(lines.get(i), x + 14, y + 40 + i * 17);
+            g.drawString(lines.get(i), tx, y + 40 + i * 17);
         }
     }
 
@@ -278,10 +284,7 @@ public final class SetupScreen implements Screen {
     }
 
     private void arrow(Graphics2D g, Rectangle r, String glyph) {
-        boolean hover = r.contains(mouseX, mouseY);
-        g.setColor(hover ? new Color(0x5A4A2A) : new Color(0x3A3020));
-        g.fillRoundRect(r.x + 4, r.y, r.width - 8, r.height, 10, 10);
-        UiTheme.drawCentered(g, glyph, UiTheme.TITLE.deriveFont(22f), r.getCenterX(), r.y + 27, UiTheme.GOLD_LIGHT);
+        MenuButton.drawArrow(g, r, glyph.contains("‹") || glyph.contains("<") || glyph.contains("◀"), r.contains(mouseX, mouseY));
     }
 
     // ------------------------------------------------------------------ entrées

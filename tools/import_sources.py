@@ -785,6 +785,10 @@ def main():
     build_forest(args.dst)
     build_desert(args.dst)
     build_foreground(args.dst)
+    import import_maps
+    import import_ui
+    import_maps.build_all(args.dst)        # Ruines, Montagne, Arène
+    import_ui.build_all(args.dst)          # portraits HD (remplacent ceux tirés des planches), boutons
 
 
 if __name__ == "__main__":

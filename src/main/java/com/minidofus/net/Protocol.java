@@ -32,7 +32,7 @@ package com.minidofus.net;
 public final class Protocol {
 
     /** À incrémenter à chaque changement incompatible du protocole ou des règles. */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
     public static final int DEFAULT_PORT = 7777;
     public static final int MAX_PLAYERS = 6;
     public static final int MAX_NAME = 16;

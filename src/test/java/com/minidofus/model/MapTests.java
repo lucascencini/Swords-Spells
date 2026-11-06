@@ -14,10 +14,8 @@ public final class MapTests {
 
     public static void run() {
         Check.suite("Génération de cartes (" + MapTheme.values().length + " ambiances x 300 graines)");
-        int lakeWithWater = 0;
-        int pathWithStone = 0;
-        int frozen = 0;
-        int dryDesert = 0;
+        int illustrated = 0;
+        int dry = 0;
         int problems = 0;
         for (MapTheme theme : MapTheme.values()) {
             for (long seed = 0; seed < 300; seed++) {
@@ -52,11 +50,8 @@ public final class MapTests {
                 }
                 long blockingDecor = a.decor().stream().filter(d -> d.kind().isBlocking()).count();
                 if (blockingDecor != obstacles) { problems++; Check.that(false, tag + " : décor bloquant != obstacles"); }
-                if (theme == MapTheme.LAKE && water >= 10) lakeWithWater++;
-                if (theme == MapTheme.RUINS && stone >= 20) pathWithStone++;
-                if (theme == MapTheme.SNOW && ice >= 10) frozen++;
-                if (theme == MapTheme.DESERT && water == 0) dryDesert++;
-                if (theme != MapTheme.SNOW && ice != 0) { problems++; Check.that(false, tag + " : glace hors montagne"); }
+                if (theme.backdrop() != null) illustrated++;
+                if (water == 0 && ice == 0 && stone == 0) dry++;
                 boolean wet = theme.feature() == MapTheme.Feature.LAKE;
                 if (!wet && water != 0) { problems++; Check.that(false, tag + " : eau hors lac"); }
 
@@ -72,10 +67,9 @@ public final class MapTests {
                 }
             }
         }
-        Check.equal(300, lakeWithWater, "chaque carte « lac » contient un étang d'au moins 10 cases");
-        Check.equal(300, pathWithStone, "chaque carte « ruines » a un chemin de pierre");
-        Check.equal(300, frozen, "chaque carte « neige » a un lac gelé");
-        Check.equal(300, dryDesert, "les cartes « désert » n'ont pas d'eau (plateau de sable)");
+        Check.equal(MapTheme.values().length * 300, illustrated, "toutes les cartes sont illustrées");
+        Check.equal(MapTheme.values().length * 300, dry, "sol uni sur les plateaux illustrés (ni eau, ni glace, ni dallage peint)");
+        Check.equal(5, MapTheme.values().length, "5 cartes : forêt, ruines, montagne, désert, arène");
         Check.equal(0, problems, "toutes les cartes générées sont valides");
 
         Check.suite("Reproductibilité des cartes");
@@ -92,8 +86,5 @@ public final class MapTests {
         Check.that(!a1.decor().equals(MapGenerator.generate(MapTheme.FOREST, 43).decor()), "graines différentes : cartes différentes");
         long trees = a1.decor().stream().filter(d -> d.kind().role() == DecorKind.Role.TREE).count();
         Check.equal(0L, trees, "forêt illustrée : aucun décor généré autour de l'arène");
-        Arena lake = MapGenerator.generate(MapTheme.LAKE, 42);
-        long lakeTrees = lake.decor().stream().filter(d -> d.kind().role() == DecorKind.Role.TREE).count();
-        Check.equal((long) MapTheme.LAKE.trees(), lakeTrees, "nombre d'arbres demandé atteint (lac)");
     }
 }

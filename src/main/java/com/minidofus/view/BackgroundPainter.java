@@ -38,11 +38,11 @@ public final class BackgroundPainter {
             case MEADOW -> meadow(g, rng, w, h);
             case SNOW -> snow(g, rng, w, h);
             case DESERT -> desert(g, rng, w, h);
-            case DUNGEON -> dungeon(g, rng, w, h);
+            case DUSK -> dungeon(g, rng, w, h);
         }
         float r = Math.max(w, h) * 0.75f;
         g.setPaint(new RadialGradientPaint(w / 2f, h / 2f, r, new float[] {0.55f, 1f},
-                new Color[] {new Color(0, 0, 0, 0), new Color(0, 0, 0, biome == Biome.DUNGEON ? 170 : 110)}));
+                new Color[] {new Color(0, 0, 0, 0), new Color(0, 0, 0, biome == Biome.DUSK ? 170 : 110)}));
         g.fillRect(0, 0, w, h);
         g.dispose();
         return img;

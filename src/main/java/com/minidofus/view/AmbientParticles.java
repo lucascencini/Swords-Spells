@@ -25,7 +25,7 @@ public final class AmbientParticles {
         int count = switch (biome) {
             case SNOW -> 140;
             case DESERT -> 45;
-            case DUNGEON -> 36;
+            case DUSK -> 36;
             case MEADOW -> 22;
         };
         x = new double[count];
@@ -54,7 +54,7 @@ public final class AmbientParticles {
                     x[i] += dt * 0.08 * speed[i];
                     y[i] += dt * 0.01 * Math.sin(clock + phase[i]);
                 }
-                case DUNGEON -> {
+                case DUSK -> {
                     y[i] -= dt * 0.03 * speed[i];
                     x[i] += dt * 0.01 * Math.sin(clock * 1.3 + phase[i]);
                 }
@@ -85,7 +85,7 @@ public final class AmbientParticles {
                     g.setColor(new Color(250, 225, 170, 90));
                     g.fill(new Ellipse2D.Double(px - r, py - r, r * 2, r * 2));
                 }
-                case DUNGEON -> {
+                case DUSK -> {
                     float flicker = (float) (0.6 + 0.4 * Math.sin(clock * 6 + phase[i] * 3));
                     float r = (float) (2 + size[i] * 2.5);
                     g.setPaint(new RadialGradientPaint((float) px, (float) py, r * 2.5f, new float[] {0f, 0.3f, 1f},
